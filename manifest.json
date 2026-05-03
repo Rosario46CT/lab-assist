@@ -1,0 +1,24 @@
+{
+  "name": "LabAssist - Ricerca Laboratorio",
+  "short_name": "LabAssist",
+  "description": "Strumenti avanzati per ricercatori in laboratorio.",
+  "start_url": "index.html",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f0eff5",
+  "theme_color": "#1a1a20",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

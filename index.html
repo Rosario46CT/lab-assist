@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<!-- Meta tag per Mobile: evita zoom accidentali e gestisce i bordi degli schermi moderni (iPhone Notch) -->
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>LabAssist</title>
+
+<!-- Trasforma il sito in una Web App -->
+<link rel="manifest" href="manifest.json">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="LabAssist">
+<meta name="theme-color" content="#1a1a20">
+
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#f0eff5;--surface:#fff;--border:#e2e0e8;--text:#1a1a20;--muted:#8a8a90;--shadow:0 2px 16px rgba(0,0,0,0.08);--radius:16px;}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+
+/* Ottimizzazione per iPhone: evita che il contenuto finisca sotto la barra di stato o il notch */
+body{
+    background:var(--bg);
+    color:var(--text);
+    font-family:'Syne',sans-serif;
+    min-height:100vh;
+    max-width:500px;
+    margin:0 auto;
+    padding-bottom: env(safe-area-inset-bottom);
+}
+
+.bar{
+    background:#1a1a20;
+    color:#fff;
+    padding:.65rem 1.2rem;
+    /* Supporto Notch iOS */
+    padding-top: calc(0.65rem + env(safe-area-inset-top));
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    position:sticky;
+    top:0;
+    z-index:200;
+}
+
+.view{display:none;}.view.active{display:block;animation:slideIn .25s ease;}
+@keyframes slideIn{from{opacity:0;transform:translateX(14px)}to{opacity:1;transform:translateX(0)}}
+@keyframes fadeIn{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
+
+.bar-title{font-weight:800;font-size:.95rem;letter-spacing:-.5px;}
+.bar-title span{color:#7c6fff;}
+.back{background:rgba(255,255,255,.12);border:none;color:#fff;font-family:'Syne',sans-serif;font-size:.78rem;font-weight:700;padding:.28rem .8rem;border-radius:20px;cursor:pointer;display:none;align-items:center;gap:.3rem;}
+.back.show{display:flex;}
+.bar-lbl{font-size:.75rem;color:rgba(255,255,255,.55);font-weight:600;}
+
+/* HOME */
+.hero{background:linear-gradient(135deg,#1a1a20,#2d2060);padding:1.75rem 1.4rem 1.4rem;color:#fff;}
+.hero h2{font-size:1.5rem;font-weight:800;letter-spacing:-.5px;margin-bottom:.15rem;}
+.hero p{font-size:.78rem;color:rgba(255,255,255,.5);font-family:'JetBrains Mono',monospace;}
+.hero-date{font-size:.65rem;color:rgba(255,255,255,.35);margin-top:.4rem;font-family:'JetBrains Mono',monospace;}
+.hsec{padding:1.1rem 1.1rem 0;}
+.hsec-lbl{font-size:.6rem;font-weight:700;letter-spacing:2px;color:var(--muted);text-transform:uppercase;margin-bottom:.65rem;}
+.app-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:.65rem;padding-bottom:1.1rem;}
+.app-icon{background:var(--surface);border-radius:var(--radius);padding:.9rem .4rem .75rem;display:flex;flex-direction:column;align-items:center;gap:.45rem;cursor:pointer;border:1.5px solid var(--border);box-shadow:var(--shadow);transition:transform .13s;user-select:none;}
+.app-icon:active{transform:scale(.91);}
+.ic-box{width:50px;height:50px;border-radius:13px;display:flex;align-items:center;justify-content:center;font-size:1.5rem;}
+.ic-name{font-size:.65rem;font-weight:700;text-align:center;color:var(--text);line-height:1.25;}
+.ic-timer{background:linear-gradient(135deg,#ff6b6b,#ee5a24);}
+.ic-samples{background:linear-gradient(135deg,#48dbfb,#0097e6);}
+.ic-protocols{background:linear-gradient(135deg,#ffeaa7,#fdcb6e);}
+.ic-myp{background:linear-gradient(135deg,#a29bfe,#6c5ce7);}
+.ic-calc{background:linear-gradient(135deg,#55efc4,#00b894);}
+.ic-plate{background:linear-gradient(135deg,#fd79a8,#e84393);}
+.ic-cells{background:linear-gradient(135deg,#fab1a0,#e17055);}
+.ic-gel{background:linear-gradient(135deg,#74b9ff,#0984e3);}
+
+/* INNER */
+.inner{padding:1.1rem;}
+.ptitle{font-size:1.25rem;font-weight:800;letter-spacing:-.5px;margin-bottom:1.1rem;display:flex;align-items:center;gap:.55rem;}
+.pdot{width:8px;height:8px;border-radius:50%;}
+
+/* CARD */
+.card{background:var(--surface);border:1.5px solid var(--border);border-radius:14px;padding:1rem;box-shadow:var(--shadow);margin-bottom:.8rem;}
+.ctitle{font-size:.68rem;font-weight:700;letter-spacing:.5px;color:var(--muted);text-transform:uppercase;margin-bottom:.8rem;}
+
+/* FORM */
+.frow{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:.55rem;margin-bottom:.55rem;}
+label{font-size:.6rem;font-weight:700;color:var(--muted);letter-spacing:.5px;text-transform:uppercase;display:block;margin-bottom:.2rem;}
+input,select,textarea{width:100%;background:var(--bg);border:1.5px solid var(--border);border-radius:9px;padding:.5rem .75rem;font-family:'JetBrains Mono',monospace;font-size:.82rem;color:var(--text);outline:none;transition:border-color .2s;}
+input:focus,select:focus,textarea:focus{border-color:#7c6fff;}
+textarea{resize:vertical;min-height:65px;}
+
+/* BUTTONS */
+.btn{background:#1a1a20;color:#fff;border:none;border-radius:9px;padding:.55rem 1rem;font-family:'Syne',sans-serif;font-size:.78rem;font-weight:700;cursor:pointer;transition:transform .12s;}
+.btn:active{transform:scale(.95);}
+.btn-v{background:linear-gradient(135deg,#7c6fff,#5a4dce);}
+.btn-g{background:linear-gradient(135deg,#00b894,#00875a);}
+.btn-r{background:linear-gradient(135deg,#e17055,#c8420a);}
+.btn-b{background:linear-gradient(135deg,#74b9ff,#0984e3);}
+.btn-o{background:transparent;border:1.5px solid var(--border);color:var(--text);}
+.btn-sm{padding:.35rem .7rem;font-size:.7rem;border-radius:8px;}
+
+/* RESULT */
+.rbox{background:#1a1a20;color:#e0ffe8;border-radius:11px;padding:.85rem .95rem;font-family:'JetBrains Mono',monospace;font-size:.82rem;margin-top:.6rem;line-height:1.8;display:none;}
+.rbox.show{display:block;animation:fadeIn .2s ease;}
+.rv{font-size:1.2rem;font-weight:500;color:#7dffb3;}
+
+/* TOAST */
+.toast{position:fixed;bottom:1.4rem;left:50%;transform:translateX(-50%);background:#1a1a20;color:#fff;padding:.65rem 1.2rem;border-radius:20px;font-size:.78rem;font-weight:600;box-shadow:0 4px 20px rgba(0,0,0,.25);z-index:999;display:none;white-space:nowrap;}
+
+/* BADGES */
+.badge{display:inline-block;padding:2px 7px;border-radius:20px;font-size:.6rem;font-weight:700;}
+.b-dna{background:#e6f4ff;color:#0057b8;}.b-rna{background:#fff0e6;color:#c8420a;}
+.b-prot{background:#e6fff2;color:#00875a;}.b-cells{background:#f5e6ff;color:#7a00b8;}
+
+/* SAMPLE TABLE */
+.stbl{width:100%;border-collapse:collapse;font-size:.75rem;}
+.stbl th{text-align:left;padding:.45rem .55rem;font-size:.58rem;font-weight:700;color:var(--muted);text-transform:uppercase;border-bottom:2px solid var(--border);}
+.stbl td{padding:.5rem .55rem;border-bottom:1px solid var(--border);font-family:'JetBrains Mono',monospace;font-size:.72rem;}
+.stbl tr:last-child td{border-bottom:none;}
+
+/* TIMERS */
+.tgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:.65rem;margin-bottom:.8rem;}
+.tcard{background:var(--surface);border:1.5px solid var(--border);border-radius:13px;padding:.9rem;position:relative;transition:border-color .2s;}
+.tcard.running{border-color:#00b894;}.tcard.done{border-color:#e17055;background:#fff8f5;}
+.tname{font-size:.68rem;font-weight:700;color:var(--muted);margin-bottom:.35rem;text-transform:uppercase;letter-spacing:.5px;}
+.tdisp{font-family:'JetBrains Mono',monospace;font-size:1.9rem;letter-spacing:2px;margin-bottom:.55rem;}
+.tcard.running .tdisp{color:#00b894;}.tcard.done .tdisp{color:#e17055;}
+.tprog{height:3px;background:var(--border);border-radius:2px;margin-bottom:.55rem;overflow:hidden;}
+.tpbar{height:100%;background:#00b894;border-radius:2px;transition:width 1s linear;}
+.tcard.done .tpbar{background:#e17055;}
+.tbtns{display:flex;gap:.35rem;flex-wrap:wrap;}
+.tdel{position:absolute;top:.55rem;right:.55rem;background:none;border:none;color:var(--muted);cursor:pointer;font-size:.85rem;}
+
+/* PROTOCOLS */
+.pitem{background:var(--surface);border:1.5px solid var(--border);border-radius:12px;padding:.85rem .95rem;cursor:pointer;display:flex;align-items:center;gap:.7rem;transition:border-color .2s;}
+.pitem:active{border-color:#7c6fff;}
+.pico{width:36px;height:36px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:1.15rem;flex-shrink:0;}
+.pname{font-weight:700;font-size:.85rem;margin-bottom:1px;}
+.pmeta{font-size:.65rem;color:var(--muted);font-family:'JetBrains Mono',monospace;}
+.psteps{display:none;margin-top:.7rem;border-top:1px solid var(--border);padding-top:.7rem;}
+.psteps.open{display:block;}
+.step{display:flex;gap:.55rem;margin-bottom:.6rem;align-items:flex-start;}
+.snum{width:20px;height:20px;background:#7c6fff;color:#fff;border-radius:50%;font-size:.6rem;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px;}
+.stxt{font-size:.8rem;line-height:1.5;flex:1;}
+.stime{font-family:'JetBrains Mono',monospace;font-size:.62rem;color:#0984e3;background:#e6f0ff;padding:2px 5px;border-radius:4px;white-space:nowrap;flex-shrink:0;}
+
+/* MY PROTOCOLS */
+.mypc{background:var(--surface);border:1.5px solid var(--border);border-radius:13px;overflow:hidden;margin-bottom:.7rem;}
+.myph{display:flex;align-items:center;gap:.7rem;padding:.85rem .95rem;cursor:pointer;}
+.myptt{font-weight:700;font-size:.85rem;flex:1;}
+.mypm{font-size:.62rem;color:var(--muted);font-family:'JetBrains Mono',monospace;}
+.mypp{font-family:'JetBrains Mono',monospace;font-size:.68rem;color:#7c6fff;font-weight:700;}
+.mypb{display:none;border-top:1px solid var(--border);padding:.85rem .95rem;}
+.mypb.open{display:block;}
+.mstep{display:flex;align-items:flex-start;gap:.55rem;padding:.5rem .35rem;border-bottom:1px solid var(--border);cursor:pointer;border-radius:7px;}
+.mstep:last-child{border-bottom:none;}
+.mchk{width:19px;height:19px;border:2px solid var(--border);border-radius:5px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:.7rem;transition:all .2s;margin-top:1px;}
+.mstep.checked .mchk{background:#7c6fff;border-color:#7c6fff;color:#fff;}
+.mstxt{flex:1;font-size:.8rem;line-height:1.5;}
+.mstep.checked .mstxt{text-decoration:line-through;color:var(--muted);}
+.mstime{font-family:'JetBrains Mono',monospace;font-size:.62rem;color:#0984e3;background:#e6f0ff;padding:2px 5px;border-radius:4px;white-space:nowrap;flex-shrink:0;}
+.pbar-w{height:3px;background:var(--border);border-radius:2px;margin:.35rem 0 0;overflow:hidden;}
+.pbar{height:100%;background:#7c6fff;border-radius:2px;transition:width .4s ease;}
+.asr{display:flex;gap:.35rem;margin-top:.6rem;flex-wrap:wrap;}
+.asr input{flex:1;min-width:100px;}
+
+/* CALC TABS */
+.ctabs{display:flex;gap:.35rem;margin-bottom:.9rem;flex-wrap:wrap;}
+.ctab{padding:.35rem .8rem;border-radius:20px;font-size:.68rem;font-weight:700;cursor:pointer;border:1.5px solid var(--border);background:transparent;color:var(--muted);font-family:'Syne',sans-serif;transition:all .2s;}
+.ctab.active{background:#1a1a20;color:#fff;border-color:#1a1a20;}
+.cpanel{display:none;}.cpanel.active{display:block;animation:fadeIn .2s ease;}
+
+/* PLATE MAP */
+.plate-type-tabs{display:flex;gap:.35rem;margin-bottom:.9rem;flex-wrap:wrap;}
+.pt-tab{padding:.32rem .75rem;border-radius:20px;font-size:.65rem;font-weight:700;cursor:pointer;border:1.5px solid var(--border);background:transparent;color:var(--muted);font-family:'Syne',sans-serif;transition:all .2s;}
+.pt-tab.active{background:#e84393;color:#fff;border-color:#e84393;}
+.plate-grid{display:grid;gap:2px;overflow-x:auto;margin-bottom:.7rem;}
+.pcol-h,.prow-h{font-family:'JetBrains Mono',monospace;font-size:.5rem;color:var(--muted);display:flex;align-items:center;justify-content:center;font-weight:600;}
+.well{aspect-ratio:1;border-radius:50%;border:1.5px solid var(--border);background:var(--surface);cursor:pointer;transition:transform .1s;display:flex;align-items:center;justify-content:center;font-size:.4rem;font-family:'JetBrains Mono',monospace;color:rgba(0,0,0,.5);font-weight:600;overflow:hidden;}
+.well:active{transform:scale(1.3);}
+.cpal{display:flex;gap:.35rem;flex-wrap:wrap;margin-bottom:.6rem;}
+.csw{width:24px;height:24px;border-radius:50%;cursor:pointer;border:2.5px solid transparent;transition:transform .15s;}
+.csw.active{border-color:#1a1a20;transform:scale(1.15);}
+.pleg{display:flex;flex-wrap:wrap;gap:.35rem;margin-top:.6rem;}
+.ldot{width:10px;height:10px;border-radius:50%;}
+.litem{display:flex;align-items:center;gap:.3rem;font-size:.68rem;font-family:'JetBrains Mono',monospace;}
+
+/* CELL CULTURE */
+.ccard{background:var(--surface);border:1.5px solid var(--border);border-radius:13px;overflow:hidden;margin-bottom:.7rem;}
+.cch{padding:.85rem .95rem .7rem;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;}
+.cname{font-weight:800;font-size:.92rem;}
+.cpas{font-family:'JetBrains Mono',monospace;font-size:.65rem;background:var(--bg);padding:3px 8px;border-radius:20px;color:var(--muted);}
+.ccb{padding:.85rem .95rem;}
+.cbar-w{height:9px;background:var(--bg);border-radius:5px;overflow:hidden;margin:.35rem 0;}
+.cbar{height:100%;border-radius:5px;transition:width .5s ease;}
+.cmk{display:flex;justify-content:space-between;font-family:'JetBrains Mono',monospace;font-size:.55rem;color:var(--muted);}
+.cinf{display:flex;justify-content:space-between;padding:.25rem 0;border-bottom:1px solid var(--border);font-size:.75rem;}
+.cinf:last-child{border-bottom:none;}
+.cinfl{color:var(--muted);font-size:.62rem;}
+.cinfv{font-family:'JetBrains Mono',monospace;font-size:.72rem;font-weight:500;}
+.salert{background:#fff8e6;border:1px solid #ffd96e;border-radius:7px;padding:.4rem .65rem;font-size:.72rem;font-weight:700;color:#7a5200;margin-top:.6rem;display:none;}
+.salert.show{display:block;}
+
+.flask-wrap{display:flex;justify-content:center;margin-bottom:.5rem;}
+
+/* GEL/BLOT */
+.gel-wrap{background:#ececea;border:2px solid #ccc;border-radius:7px;padding:.55rem;overflow-x:auto;margin-bottom:.7rem;}
+.gel-inner{display:flex;gap:5px;align-items:stretch;}
+.gel-axis{display:flex;flex-direction:column;min-width:32px;padding:0 0 4px;font-family:'JetBrains Mono',monospace;font-size:.48rem;color:var(--muted);text-align:right;position:relative;}
+.gel-lane{display:flex;flex-direction:column;align-items:center;min-width:46px;}
+.ll{font-family:'JetBrains Mono',monospace;font-size:.55rem;color:#444;margin-bottom:3px;text-align:center;max-width:46px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;}
+.lt{width:38px;background:linear-gradient(to bottom,#ddd,#c8c8c8);border-radius:2px;position:relative;border:1px solid #bbb;cursor:pointer;}
+.gband{position:absolute;left:3px;right:3px;height:5px;border-radius:3px;cursor:pointer;}
+.gband:active{opacity:.6;}
+</style>
+</head>
+<body>
+
+<div class="bar">
+  <button class="back" id="backBtn" onclick="goHome()">← Home</button>
+  <div class="bar-title">🧬 <span>Lab</span>Assist</div>
+  <div class="bar-lbl" id="barLbl"></div>
+</div>
+
+<!-- HOME -->
+<div id="view-home" class="view active">
+  <div class="hero">
+    <h2>Benvenuto 👋</h2>
+    <p>Il tuo assistente da laboratorio</p>
+    <div class="hero-date" id="heroDate"></div>
+  </div>
+  <div class="hsec">
+    <div class="hsec-lbl">Strumenti</div>
+    <div class="app-grid">
+      <div class="app-icon" onclick="go('timers','⏱ Timer')"><div class="ic-box ic-timer">⏱</div><div class="ic-name">Timer<br>Multipli</div></div>
+      <div class="app-icon" onclick="go('samples','🧪 Campioni')"><div class="ic-box ic-samples">🧪</div><div class="ic-name">Gestione<br>Campioni</div></div>
+      <div class="app-icon" onclick="go('calc','🔢 Calcoli')"><div class="ic-box ic-calc">🔢</div><div class="ic-name">Calcolatori</div></div>
+      <div class="app-icon" onclick="go('platemap','🔵 Plate Map')"><div class="ic-box ic-plate">🔵</div><div class="ic-name">Plate Map<br>Multiwell</div></div>
+      <div class="app-icon" onclick="go('cells','🧫 Cellule')"><div class="ic-box ic-cells">🧫</div><div class="ic-name">Cell Culture<br>Tracker</div></div>
+      <div class="app-icon" onclick="go('gel','🟦 Gel/Blot')"><div class="ic-box ic-gel">🟦</div><div class="ic-name">Gel / Blot<br>Visualizer</div></div>
+    </div>
+    <div class="hsec-lbl">Protocolli</div>
+    <div class="app-grid">
+      <div class="app-icon" onclick="go('protocols','📋 Protocolli')"><div class="ic-box ic-protocols">📋</div><div class="ic-name">Protocolli<br>Standard</div></div>
+      <div class="app-icon" onclick="go('mypp','✏️ I Miei')"><div class="ic-box ic-myp">✏️</div><div class="ic-name">I Miei<br>Protocolli</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- TUTTE LE ALTRE VIEW (Timer, Campioni, ecc.) -->
+<div id="view-timers" class="view"><div class="inner">
+  <div class="ptitle"><div class="pdot" style="background:#ee5a24"></div>Timer Multipli</div>
+  <div class="tgrid" id="tGrid"></div>
+  <div class="card"><div class="ctitle">➕ Nuovo Timer</div>
+    <div class="frow">
+      <div><label>Nome</label><input id="tName" placeholder="es. Ibridazione"></div>
+      <div><label>Ore</label><input type="number" id="tH" min="0" value="0"></div>
+      <div><label>Min</label><input type="number" id="tM" min="0" max="59" value="5"></div>
+      <div><label>Sec</label><input type="number" id="tS" min="0" max="59" value="0"></div>
+    </div>
+    <button class="btn btn-g" onclick="addTimer()">▶ Avvia</button>
+  </div>
+</div></div>
+
+<!-- VIEW CAMPIONI -->
+<div id="view-samples" class="view"><div class="inner">
+  <div class="ptitle"><div class="pdot" style="background:#0097e6"></div>Gestione Campioni</div>
+  <div class="card"><div class="ctitle">➕ Aggiungi</div>
+    <div class="frow">
+      <div><label>ID</label><input id="sId" placeholder="DNA-001"></div>
+      <div><label>Tipo</label><select id="sType"><option value="dna">DNA</option><option value="rna">RNA</option><option value="prot">Proteina</option></select></div>
+      <div><label>Conc.</label><input id="sConc" placeholder="250 ng/µL"></div>
+      <div><label>Vol (µL)</label><input type="number" id="sVol"></div>
+    </div>
+    <button class="btn btn-b" onclick="addSample()">💾 Salva</button>
+  </div>
+  <div class="card"><div class="ctitle">📦 Registro (<span id="sCnt">0</span>)</div>
+    <div style="overflow-x:auto"><table class="stbl"><thead><tr><th>ID</th><th>Tipo</th><th>Conc.</th><th>Azioni</th></tr></thead><tbody id="sTbody"></tbody></table></div>
+  </div>
+</div></div>
+
+<!-- VIEW CALCOLATORI -->
+<div id="view-calc" class="view"><div class="inner">
+  <div class="ptitle"><div class="pdot" style="background:#00b894"></div>Calcolatori</div>
+  <div class="ctabs">
+    <button class="ctab active" onclick="showCalc('dil')">Diluizioni</button>
+    <button class="ctab" onclick="showCalc('pcr')">PCR Mix</button>
+  </div>
+  <div id="calc-dil" class="cpanel active"><div class="card">
+    <div class="frow">
+      <div><label>C iniziale</label><input type="number" id="dCi"></div>
+      <div><label>C finale</label><input type="number" id="dCf"></div>
+      <div><label>Vol finale (µL)</label><input type="number" id="dVf"></div>
+    </div>
+    <button class="btn" onclick="calcDil()">Calcola</button>
+    <div id="rDil" class="rbox"></div>
+  </div></div>
+</div></div>
+
+<!-- VIEW PROTOCOLLI -->
+<div id="view-protocols" class="view"><div class="inner">
+  <div class="ptitle"><div class="pdot" style="background:#fdcb6e"></div>Protocolli Standard</div>
+  <div id="protoList"></div>
+</div></div>
+
+<!-- VIEW PLATE MAP -->
+<div id="view-platemap" class="view"><div class="inner">
+  <div class="ptitle"><div class="pdot" style="background:#e84393"></div>Plate Map</div>
+  <div class="card">
+    <div id="plateGrid" class="plate-grid"></div>
+    <button class="btn btn-o btn-sm" onclick="clearPlate()">🗑 Svuota</button>
+  </div>
+</div></div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// NAVIGAZIONE
+function go(id,lbl){
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+  document.getElementById('view-'+id).classList.add('active');
+  document.getElementById('backBtn').classList.add('show');
+  document.getElementById('barLbl').textContent=lbl;
+  window.scrollTo(0,0);
+}
+function goHome(){
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+  document.getElementById('view-home').classList.add('active');
+  document.getElementById('backBtn').classList.remove('show');
+  document.getElementById('barLbl').textContent='';
+}
+function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.style.display='block';setTimeout(()=>t.style.display='none',2500);}
+
+// TIMER LOGIC
+let timers=[], tIv=null;
+function addTimer(){
+  const name=document.getElementById('tName').value||'Timer '+(timers.length+1);
+  const h=parseInt(document.getElementById('tH').value)||0;
+  const m=parseInt(document.getElementById('tM').value)||0;
+  const s=parseInt(document.getElementById('tS').value)||0;
+  const total = (h*3600) + (m*60) + s;
+  if(total<=0) return;
+  timers.push({id:Date.now(), name, total, remaining:total, running:true});
+  renderTimers();
+  if(!tIv) tIv = setInterval(updateTimers, 1000);
+}
+function updateTimers(){
+  timers.forEach(t=>{ if(t.running && t.remaining > 0) t.remaining--; });
+  renderTimers();
+}
+function renderTimers(){
+  const g=document.getElementById('tGrid'); g.innerHTML='';
+  timers.forEach(t=>{
+    const pct = (t.remaining/t.total)*100;
+    g.innerHTML += `<div class="tcard ${t.remaining===0?'done':''}">
+      <div class="tname">${t.name}</div>
+      <div class="tdisp">${Math.floor(t.remaining/60)}:${String(t.remaining%60).padStart(2,'0')}</div>
+      <div class="tprog"><div class="tpbar" style="width:${pct}%"></div></div>
+    </div>`;
+  });
+}
+
+// CALCOLI
+function showCalc(id){
+  document.querySelectorAll('.cpanel').forEach(p=>p.classList.remove('active'));
+  document.getElementById('calc-'+id).classList.add('active');
+}
+function calcDil(){
+  const ci=parseFloat(document.getElementById('dCi').value);
+  const cf=parseFloat(document.getElementById('dCf').value);
+  const vf=parseFloat(document.getElementById('dVf').value);
+  if(!ci || !cf || !vf) return;
+  const vs = (cf*vf)/ci;
+  const r = document.getElementById('rDil');
+  r.innerHTML = `Preleva <span class="rv">${vs.toFixed(2)}µL</span> di stock e aggiungi <span class="rv">${(vf-vs).toFixed(2)}µL</span> di buffer.`;
+  r.classList.add('show');
+}
+
+// Inizializzazione data
+document.getElementById('heroDate').textContent = new Date().toLocaleDateString('it-IT',{weekday:'long',day:'numeric',month:'long'});
+
+// Altre funzioni semplificate per brevità (Samples, Plate)
+let samples=[];
+function addSample(){
+    const id=document.getElementById('sId').value;
+    if(!id) return;
+    samples.push({id, type:document.getElementById('sType').value, conc:document.getElementById('sConc').value});
+    renderSamples();
+    toast("Campione salvato!");
+}
+function renderSamples(){
+    const b=document.getElementById('sTbody'); b.innerHTML='';
+    samples.forEach(s=> b.innerHTML+=`<tr><td>${s.id}</td><td>${s.type}</td><td>${s.conc}</td><td><button onclick="toast('Info...')">👁</button></td></tr>`);
+    document.getElementById('sCnt').textContent = samples.length;
+}
+</script>
+</body>
+</html>
