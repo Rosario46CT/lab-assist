@@ -560,10 +560,10 @@ textarea{resize:vertical;min-height:65px;}
 <div class="toast" id="toast"></div>
 
 <!-- LAB SETUP MODAL -->
-<div class="modal-overlay" id="labModal">
+<div class="modal-overlay" id="labModal" style="display:none">
   <div class="modal-box">
     <div class="modal-title">🧬 Benvenuto in LabAssist</div>
-    <div class="modal-sub">Inserisci il codice del tuo lab per sincronizzare campioni, protocolli e cell culture con il tuo team.<br><br>Se non hai un codice, creane uno nuovo — condividilo con i colleghi!</div>
+    <div class="modal-sub">Inserisci il codice del tuo lab per sincronizzare campioni, protocolli e cell culture con il tuo team.<br><br>Se non hai un codice, creane uno nuovo e condividilo con i colleghi!</div>
     <div style="margin-bottom:.6rem">
       <label>Codice Lab</label>
       <input id="labCodeInput" placeholder="es. LAB-ROSSI-2024" style="text-transform:uppercase;letter-spacing:1px">
@@ -572,15 +572,16 @@ textarea{resize:vertical;min-height:65px;}
       <button class="btn btn-v" style="flex:1" onclick="joinLab()">🔗 Entra nel Lab</button>
       <button class="btn btn-g" style="flex:1" onclick="createLab()">✨ Crea Nuovo</button>
     </div>
-    <div style="font-size:.62rem;color:var(--muted);text-align:center">I timer e il Gel restano sempre locali (sono temporanei)</div>
+    <div style="font-size:.62rem;color:var(--muted);text-align:center">Timer e Gel restano sempre locali</div>
   </div>
 </div>
 
-<script type="module">
-// ===== FIREBASE =====
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getFirestore, doc, collection, setDoc, getDoc, onSnapshot, deleteDoc, getDocs } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+<!-- Firebase compat SDK (works with regular scripts, no module needed) -->
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
 
+<script>
+// ===== FIREBASE INIT =====
 const firebaseConfig = {
   apiKey: "AIzaSyAmH0ymEu_1NScs1EcfUjAIW1Z683TCck4",
   authDomain: "lab-assist-eabca.firebaseapp.com",
@@ -589,115 +590,77 @@ const firebaseConfig = {
   messagingSenderId: "279556842570",
   appId: "1:279556842570:web:90e045c8cc6c06e095b2b3"
 };
-const fbApp = initializeApp(firebaseConfig);
-const db = getFirestore(fbApp);
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
 
 let LAB_ID = null;
-let unsubSamples = null, unsubMyPs = null, unsubCells = null;
+let fbUnsubs = [];
 
-// Genera codice random
-function genCode(){
-  const adj=['ALPHA','BETA','GAMMA','DELTA','SIGMA','OMEGA','NOVA','HELIX'];
-  const num=Math.floor(100+Math.random()*900);
-  return adj[Math.floor(Math.random()*adj.length)]+'-'+num;
+function genLabCode(){
+  const words=['ALPHA','BETA','GAMMA','DELTA','SIGMA','OMEGA','NOVA','HELIX','ZETA','KAPPA'];
+  return words[Math.floor(Math.random()*words.length)]+'-'+Math.floor(100+Math.random()*900);
 }
 
-// Mostra/nascondi modal
-function showModal(){document.getElementById('labModal').style.display='flex';}
-function hideModal(){document.getElementById('labModal').style.display='none';}
-window.showLabModal=showModal;
+function showLabModal(){document.getElementById('labModal').style.display='flex';}
+function hideLabModal(){document.getElementById('labModal').style.display='none';}
 
-window.createLab=function(){
-  const code=genCode();
-  document.getElementById('labCodeInput').value=code;
-  toast('✨ Codice generato! Condividilo con il tuo team');
-};
+function createLab(){
+  document.getElementById('labCodeInput').value=genLabCode();
+  toast('✨ Codice generato! Condividilo con il team');
+}
 
-window.joinLab=async function(){
+function joinLab(){
   const code=document.getElementById('labCodeInput').value.trim().toUpperCase();
   if(!code){toast('⚠️ Inserisci un codice');return;}
   LAB_ID=code;
   localStorage.setItem('la_labId',code);
-  hideModal();
+  hideLabModal();
   updateLabChip();
-  await syncFromFirestore();
-  listenFirestore();
-  toast('🔗 Connesso al lab: '+code);
-};
+  startFirestoreListeners();
+  toast('🔗 Lab: '+code);
+}
 
 function updateLabChip(){
   const el=document.getElementById('labChip');
-  if(el && LAB_ID) el.textContent='🧬 '+LAB_ID;
+  if(el) el.textContent='🧬 '+(LAB_ID||'—');
 }
 
-// ===== SYNC TO FIRESTORE =====
-async function saveToFirestore(colName, items){
-  if(!LAB_ID) return;
+// ===== FIRESTORE SAVE =====
+async function fbSave(colName, items){
+  if(!LAB_ID||!items) return;
   try{
-    const colRef=collection(db,'labs',LAB_ID,colName);
-    // Delete all existing then re-write (simple approach)
-    const snap=await getDocs(colRef);
-    for(const d of snap.docs) await deleteDoc(d.ref);
-    for(const item of items){
-      await setDoc(doc(colRef, String(item.id||item.name||Date.now())), item);
-    }
-  }catch(e){console.warn('Firestore save error',e);}
+    const colRef=db.collection('labs').doc(LAB_ID).collection(colName);
+    const snap=await colRef.get();
+    const batch=db.batch();
+    snap.docs.forEach(d=>batch.delete(d.ref));
+    items.forEach(item=>{
+      const id=String(item.id||item.name||item.lineId||Date.now()+Math.random());
+      batch.set(colRef.doc(id), JSON.parse(JSON.stringify(item)));
+    });
+    await batch.commit();
+  }catch(e){console.warn('fbSave error',e);}
 }
 
-// ===== SYNC FROM FIRESTORE =====
-async function syncFromFirestore(){
-  if(!LAB_ID) return;
-  try{
-    const loadCol=async(colName)=>{
-      const snap=await getDocs(collection(db,'labs',LAB_ID,colName));
-      return snap.docs.map(d=>d.data());
-    };
-    const [s,p,c]=await Promise.all([loadCol('samples'),loadCol('myPs'),loadCol('cellLines')]);
-    if(s.length){window.samples=s;window.renderSamples();}
-    if(p.length){window.myPs=p;window.renderMyPs();}
-    if(c.length){window.cellLines=c;window.renderCells();}
-  }catch(e){console.warn('Firestore load error',e);}
+// ===== FIRESTORE LISTENERS =====
+function startFirestoreListeners(){
+  fbUnsubs.forEach(u=>u());
+  fbUnsubs=[];
+  const labRef=db.collection('labs').doc(LAB_ID);
+
+  fbUnsubs.push(labRef.collection('samples').onSnapshot(snap=>{
+    samples=snap.docs.map(d=>d.data());
+    _renderSamples();
+  }));
+  fbUnsubs.push(labRef.collection('myPs').onSnapshot(snap=>{
+    myPs=snap.docs.map(d=>d.data());
+    _renderMyPs();
+  }));
+  fbUnsubs.push(labRef.collection('cellLines').onSnapshot(snap=>{
+    cellLines=snap.docs.map(d=>d.data());
+    _renderCells();
+  }));
 }
 
-// ===== REALTIME LISTENERS =====
-function listenFirestore(){
-  if(!LAB_ID) return;
-  if(unsubSamples) unsubSamples();
-  if(unsubMyPs) unsubMyPs();
-  if(unsubCells) unsubCells();
-
-  unsubSamples=onSnapshot(collection(db,'labs',LAB_ID,'samples'),snap=>{
-    window.samples=snap.docs.map(d=>d.data());
-    window.renderSamples();
-  });
-  unsubMyPs=onSnapshot(collection(db,'labs',LAB_ID,'myPs'),snap=>{
-    window.myPs=snap.docs.map(d=>d.data());
-    window.renderMyPs();
-  });
-  unsubCells=onSnapshot(collection(db,'labs',LAB_ID,'cellLines'),snap=>{
-    window.cellLines=snap.docs.map(d=>d.data());
-    window.renderCells();
-  });
-}
-
-// ===== EXPOSE SAVE FUNCTIONS =====
-window.fbSaveSamples=()=>saveToFirestore('samples',window.samples);
-window.fbSaveMyPs=()=>saveToFirestore('myPs',window.myPs);
-window.fbSaveCells=()=>saveToFirestore('cellLines',window.cellLines);
-
-// ===== INIT =====
-(function(){
-  const saved=localStorage.getItem('la_labId');
-  if(saved){
-    LAB_ID=saved;
-    hideModal();
-    updateLabChip();
-    syncFromFirestore();
-    listenFirestore();
-  } else {
-    showModal();
-  }
-})();
 </script>
 
 <script>
@@ -1166,23 +1129,14 @@ const LS={
 const _rTim=renderTimers;
 renderTimers=function(){_rTim();LS.save('timers',timers.map(t=>({...t,running:false})));};
 
-const _rSam=renderSamples;
-renderSamples=function(){_rSam();LS.save('samples',samples);if(window.fbSaveSamples)window.fbSaveSamples();};
+const _renderSamples=renderSamples;
+renderSamples=function(){_renderSamples();LS.save('samples',samples);if(LAB_ID)fbSave('samples',samples);};
 
-const _rMyP=renderMyPs;
-renderMyPs=function(){_rMyP();LS.save('myPs',myPs);if(window.fbSaveMyPs)window.fbSaveMyPs();};
+const _renderMyPs=renderMyPs;
+renderMyPs=function(){_renderMyPs();LS.save('myPs',myPs);if(LAB_ID)fbSave('myPs',myPs);};
 
-const _rCells=renderCells;
-renderCells=function(){_rCells();LS.save('cellLines',cellLines);if(window.fbSaveCells)window.fbSaveCells();};
-
-// Expose to Firebase module
-window.renderSamples=()=>renderSamples();
-window.renderMyPs=()=>renderMyPs();
-window.renderCells=()=>renderCells();
-// Proxy getters so Firebase module always sees current arrays
-Object.defineProperty(window,'samples',{get:()=>samples,set:(v)=>{samples=v;},configurable:true});
-Object.defineProperty(window,'myPs',{get:()=>myPs,set:(v)=>{myPs=v;},configurable:true});
-Object.defineProperty(window,'cellLines',{get:()=>cellLines,set:(v)=>{cellLines=v;},configurable:true});
+const _renderCells=renderCells;
+renderCells=function(){_renderCells();LS.save('cellLines',cellLines);if(LAB_ID)fbSave('cellLines',cellLines);};
 
 const _rPlate=renderPlate;
 renderPlate=function(){_rPlate();LS.save('plateData',{plateData,legendMap,curPlate,plateColor});};
@@ -1234,11 +1188,21 @@ renderGel=function(){_rGel();LS.save('gel',{gelLanes,gelCfg});};
   }
 
   // Render tutto
-  renderTimers();renderSamples();renderProtos();renderMyPs();renderPlate();renderCells();renderGel();
+  renderTimers();_renderSamples();renderProtos();_renderMyPs();renderPlate();_renderCells();renderGel();
 
   // Mostra quanti dati sono stati ripristinati
   const tot=samples.length+myPs.length+cellLines.length+gelLanes.length;
   if(tot>0) setTimeout(()=>toast('💾 Dati ripristinati'),600);
+
+  // Firebase lab init
+  const savedLab=localStorage.getItem('la_labId');
+  if(savedLab){
+    LAB_ID=savedLab;
+    updateLabChip();
+    startFirestoreListeners();
+  } else {
+    setTimeout(showLabModal, 800);
+  }
 })();
 </script>
 </body>
