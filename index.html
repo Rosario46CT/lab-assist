@@ -198,6 +198,14 @@ textarea{resize:vertical;min-height:65px;}
 .lt{width:38px;background:linear-gradient(to bottom,#ddd,#c8c8c8);border-radius:2px;position:relative;border:1px solid #bbb;cursor:pointer;}
 .gband{position:absolute;left:3px;right:3px;height:5px;border-radius:3px;cursor:pointer;}
 .gband:active{opacity:.6;}
+/* LAB MODAL */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:500;display:flex;align-items:center;justify-content:center;padding:1.2rem;}
+.modal-box{background:var(--surface);border-radius:20px;padding:1.5rem;width:100%;max-width:360px;box-shadow:0 8px 40px rgba(0,0,0,.25);}
+.modal-title{font-size:1.1rem;font-weight:800;margin-bottom:.3rem;}
+.modal-sub{font-size:.75rem;color:var(--muted);margin-bottom:1.2rem;line-height:1.5;}
+.sync-dot{width:7px;height:7px;border-radius:50%;background:#7dffb3;display:inline-block;margin-left:.35rem;animation:syncpulse 1.5s infinite;}
+@keyframes syncpulse{0%,100%{opacity:1}50%{opacity:.25}}
+.lab-chip{display:inline-flex;align-items:center;gap:.35rem;background:linear-gradient(135deg,#7c6fff22,#5a4dce11);border:1.5px solid #7c6fff55;color:#5a4dce;padding:.28rem .75rem;border-radius:20px;font-size:.7rem;font-weight:700;cursor:pointer;}
 </style>
 </head>
 <body>
@@ -205,7 +213,9 @@ textarea{resize:vertical;min-height:65px;}
 <div class="bar">
   <button class="back" id="backBtn" onclick="goHome()">← Home</button>
   <div class="bar-title">🧬 <span>Lab</span>Assist</div>
-  <div class="bar-lbl" id="barLbl"></div>
+  <div style="display:flex;align-items:center;gap:.5rem">
+    <span class="lab-chip" id="labChip" onclick="window.showLabModal&&window.showLabModal()">🧬 —</span>
+  </div>
 </div>
 
 <!-- HOME -->
@@ -548,6 +558,147 @@ textarea{resize:vertical;min-height:65px;}
 </div></div>
 
 <div class="toast" id="toast"></div>
+
+<!-- LAB SETUP MODAL -->
+<div class="modal-overlay" id="labModal">
+  <div class="modal-box">
+    <div class="modal-title">🧬 Benvenuto in LabAssist</div>
+    <div class="modal-sub">Inserisci il codice del tuo lab per sincronizzare campioni, protocolli e cell culture con il tuo team.<br><br>Se non hai un codice, creane uno nuovo — condividilo con i colleghi!</div>
+    <div style="margin-bottom:.6rem">
+      <label>Codice Lab</label>
+      <input id="labCodeInput" placeholder="es. LAB-ROSSI-2024" style="text-transform:uppercase;letter-spacing:1px">
+    </div>
+    <div style="display:flex;gap:.5rem;margin-bottom:.8rem">
+      <button class="btn btn-v" style="flex:1" onclick="joinLab()">🔗 Entra nel Lab</button>
+      <button class="btn btn-g" style="flex:1" onclick="createLab()">✨ Crea Nuovo</button>
+    </div>
+    <div style="font-size:.62rem;color:var(--muted);text-align:center">I timer e il Gel restano sempre locali (sono temporanei)</div>
+  </div>
+</div>
+
+<script type="module">
+// ===== FIREBASE =====
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getFirestore, doc, collection, setDoc, getDoc, onSnapshot, deleteDoc, getDocs } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyAmH0ymEu_1NScs1EcfUjAIW1Z683TCck4",
+  authDomain: "lab-assist-eabca.firebaseapp.com",
+  projectId: "lab-assist-eabca",
+  storageBucket: "lab-assist-eabca.firebasestorage.app",
+  messagingSenderId: "279556842570",
+  appId: "1:279556842570:web:90e045c8cc6c06e095b2b3"
+};
+const fbApp = initializeApp(firebaseConfig);
+const db = getFirestore(fbApp);
+
+let LAB_ID = null;
+let unsubSamples = null, unsubMyPs = null, unsubCells = null;
+
+// Genera codice random
+function genCode(){
+  const adj=['ALPHA','BETA','GAMMA','DELTA','SIGMA','OMEGA','NOVA','HELIX'];
+  const num=Math.floor(100+Math.random()*900);
+  return adj[Math.floor(Math.random()*adj.length)]+'-'+num;
+}
+
+// Mostra/nascondi modal
+function showModal(){document.getElementById('labModal').style.display='flex';}
+function hideModal(){document.getElementById('labModal').style.display='none';}
+window.showLabModal=showModal;
+
+window.createLab=function(){
+  const code=genCode();
+  document.getElementById('labCodeInput').value=code;
+  toast('✨ Codice generato! Condividilo con il tuo team');
+};
+
+window.joinLab=async function(){
+  const code=document.getElementById('labCodeInput').value.trim().toUpperCase();
+  if(!code){toast('⚠️ Inserisci un codice');return;}
+  LAB_ID=code;
+  localStorage.setItem('la_labId',code);
+  hideModal();
+  updateLabChip();
+  await syncFromFirestore();
+  listenFirestore();
+  toast('🔗 Connesso al lab: '+code);
+};
+
+function updateLabChip(){
+  const el=document.getElementById('labChip');
+  if(el && LAB_ID) el.textContent='🧬 '+LAB_ID;
+}
+
+// ===== SYNC TO FIRESTORE =====
+async function saveToFirestore(colName, items){
+  if(!LAB_ID) return;
+  try{
+    const colRef=collection(db,'labs',LAB_ID,colName);
+    // Delete all existing then re-write (simple approach)
+    const snap=await getDocs(colRef);
+    for(const d of snap.docs) await deleteDoc(d.ref);
+    for(const item of items){
+      await setDoc(doc(colRef, String(item.id||item.name||Date.now())), item);
+    }
+  }catch(e){console.warn('Firestore save error',e);}
+}
+
+// ===== SYNC FROM FIRESTORE =====
+async function syncFromFirestore(){
+  if(!LAB_ID) return;
+  try{
+    const loadCol=async(colName)=>{
+      const snap=await getDocs(collection(db,'labs',LAB_ID,colName));
+      return snap.docs.map(d=>d.data());
+    };
+    const [s,p,c]=await Promise.all([loadCol('samples'),loadCol('myPs'),loadCol('cellLines')]);
+    if(s.length){window.samples=s;window.renderSamples();}
+    if(p.length){window.myPs=p;window.renderMyPs();}
+    if(c.length){window.cellLines=c;window.renderCells();}
+  }catch(e){console.warn('Firestore load error',e);}
+}
+
+// ===== REALTIME LISTENERS =====
+function listenFirestore(){
+  if(!LAB_ID) return;
+  if(unsubSamples) unsubSamples();
+  if(unsubMyPs) unsubMyPs();
+  if(unsubCells) unsubCells();
+
+  unsubSamples=onSnapshot(collection(db,'labs',LAB_ID,'samples'),snap=>{
+    window.samples=snap.docs.map(d=>d.data());
+    window.renderSamples();
+  });
+  unsubMyPs=onSnapshot(collection(db,'labs',LAB_ID,'myPs'),snap=>{
+    window.myPs=snap.docs.map(d=>d.data());
+    window.renderMyPs();
+  });
+  unsubCells=onSnapshot(collection(db,'labs',LAB_ID,'cellLines'),snap=>{
+    window.cellLines=snap.docs.map(d=>d.data());
+    window.renderCells();
+  });
+}
+
+// ===== EXPOSE SAVE FUNCTIONS =====
+window.fbSaveSamples=()=>saveToFirestore('samples',window.samples);
+window.fbSaveMyPs=()=>saveToFirestore('myPs',window.myPs);
+window.fbSaveCells=()=>saveToFirestore('cellLines',window.cellLines);
+
+// ===== INIT =====
+(function(){
+  const saved=localStorage.getItem('la_labId');
+  if(saved){
+    LAB_ID=saved;
+    hideModal();
+    updateLabChip();
+    syncFromFirestore();
+    listenFirestore();
+  } else {
+    showModal();
+  }
+})();
+</script>
 
 <script>
 // ===== NAV =====
@@ -1016,13 +1167,22 @@ const _rTim=renderTimers;
 renderTimers=function(){_rTim();LS.save('timers',timers.map(t=>({...t,running:false})));};
 
 const _rSam=renderSamples;
-renderSamples=function(){_rSam();LS.save('samples',samples);};
+renderSamples=function(){_rSam();LS.save('samples',samples);if(window.fbSaveSamples)window.fbSaveSamples();};
 
 const _rMyP=renderMyPs;
-renderMyPs=function(){_rMyP();LS.save('myPs',myPs);};
+renderMyPs=function(){_rMyP();LS.save('myPs',myPs);if(window.fbSaveMyPs)window.fbSaveMyPs();};
 
 const _rCells=renderCells;
-renderCells=function(){_rCells();LS.save('cellLines',cellLines);};
+renderCells=function(){_rCells();LS.save('cellLines',cellLines);if(window.fbSaveCells)window.fbSaveCells();};
+
+// Expose to Firebase module
+window.renderSamples=()=>renderSamples();
+window.renderMyPs=()=>renderMyPs();
+window.renderCells=()=>renderCells();
+// Proxy getters so Firebase module always sees current arrays
+Object.defineProperty(window,'samples',{get:()=>samples,set:(v)=>{samples=v;},configurable:true});
+Object.defineProperty(window,'myPs',{get:()=>myPs,set:(v)=>{myPs=v;},configurable:true});
+Object.defineProperty(window,'cellLines',{get:()=>cellLines,set:(v)=>{cellLines=v;},configurable:true});
 
 const _rPlate=renderPlate;
 renderPlate=function(){_rPlate();LS.save('plateData',{plateData,legendMap,curPlate,plateColor});};
