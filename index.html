@@ -182,7 +182,8 @@ textarea{resize:vertical;min-height:65px;}
 /* Flask SVG illustration */
 .flask-wrap{display:flex;justify-content:center;margin-bottom:.5rem;}
 
-/* ===== GEL/BLOT ===== */
+/* ===== 4-WELL 2×2 centering ===== */
+.plate-grid-4well{display:grid;grid-template-columns:18px repeat(2,1fr);gap:2px;max-width:200px;margin:0 auto .7rem;}
 .gel-wrap{background:#ececea;border:2px solid #ccc;border-radius:7px;padding:.55rem;overflow-x:auto;margin-bottom:.7rem;}
 .gel-inner{display:flex;gap:5px;align-items:stretch;}
 .gel-axis{display:flex;flex-direction:column;min-width:32px;padding:0 0 4px;font-family:'JetBrains Mono',monospace;font-size:.48rem;color:var(--muted);text-align:right;position:relative;}
@@ -330,13 +331,55 @@ textarea{resize:vertical;min-height:65px;}
     <div id="rPcr" class="rbox"></div>
   </div></div>
   <div id="calc-cv" class="cpanel"><div class="card"><div class="ctitle">⚗️ C₁V₁ = C₂V₂</div>
-    <div class="frow">
-      <div><label>C₁</label><input type="number" id="cvC1" placeholder="1000" step="any"></div>
-      <div><label>V₁ (lascia vuoto)</label><input type="number" id="cvV1" placeholder="?" step="any"></div>
-      <div><label>C₂</label><input type="number" id="cvC2" placeholder="50" step="any"></div>
-      <div><label>V₂ (lascia vuoto)</label><input type="number" id="cvV2" placeholder="?" step="any"></div>
+
+    <!-- Unit + Preset row -->
+    <div class="frow" style="margin-bottom:.7rem">
+      <div>
+        <label>Unità volume</label>
+        <select id="cvUnit" onchange="cvAutoCalc()">
+          <option value="µL">µL</option>
+          <option value="mL">mL</option>
+          <option value="L">L</option>
+        </select>
+      </div>
+      <div>
+        <label>Concentrazione stock</label>
+        <select id="cvPreset" onchange="applyPreset()">
+          <option value="">— Seleziona preset —</option>
+          <option value="1">1×</option>
+          <option value="2">2×</option>
+          <option value="5">5×</option>
+          <option value="10">10×</option>
+          <option value="20">20×</option>
+          <option value="50">50×</option>
+          <option value="100">100×</option>
+          <option value="custom">Personalizzata…</option>
+        </select>
+      </div>
     </div>
-    <button class="btn" onclick="calcCV()">Calcola</button>
+
+    <!-- Inputs -->
+    <div class="frow">
+      <div>
+        <label id="cvC1lbl">C₁ (stock)</label>
+        <input type="number" id="cvC1" placeholder="es. 10×" step="any" oninput="cvAutoCalc()">
+      </div>
+      <div>
+        <label id="cvV1lbl">V₁ — lascia vuoto per calcolare</label>
+        <input type="number" id="cvV1" placeholder="?" step="any" oninput="cvAutoCalc()">
+      </div>
+      <div>
+        <label id="cvC2lbl">C₂ (finale)</label>
+        <input type="number" id="cvC2" placeholder="es. 1×" step="any" oninput="cvAutoCalc()">
+      </div>
+      <div>
+        <label id="cvV2lbl">V₂ — lascia vuoto per calcolare</label>
+        <input type="number" id="cvV2" placeholder="?" step="any" oninput="cvAutoCalc()">
+      </div>
+    </div>
+    <div style="font-size:.62rem;color:var(--muted);margin-bottom:.6rem;font-family:'JetBrains Mono',monospace">
+      💡 Lascia vuoto <em>uno solo</em> tra V₁ e V₂ per calcolarlo automaticamente
+    </div>
     <div id="rCv" class="rbox"></div>
   </div></div>
   <div id="calc-gel" class="cpanel"><div class="card"><div class="ctitle">🟦 Gel Agarosio</div>
@@ -488,7 +531,27 @@ function addTimer(){
   timers.push({id:Date.now(),name,total,remaining:total,running:false,done:false});
   renderTimers();startTiv();document.getElementById('tName').value='';
 }
-function startTiv(){if(tIv)return;tIv=setInterval(()=>{let any=false;timers.forEach(t=>{if(t.running&&!t.done){t.remaining--;any=true;if(t.remaining<=0){t.remaining=0;t.running=false;t.done=true;toast('✅ '+t.name+' — COMPLETATO!')}}});renderTimers();if(!any){clearInterval(tIv);tIv=null;}},1000);}
+function alertTimer(name){
+  // Vibration (Android + some PWA)
+  if(navigator.vibrate){navigator.vibrate([400,150,400,150,600]);}
+  // Beep via Web Audio API (works on iOS too)
+  try{
+    const ctx=new(window.AudioContext||window.webkitAudioContext)();
+    const beep=(freq,start,dur)=>{
+      const o=ctx.createOscillator(),g=ctx.createGain();
+      o.connect(g);g.connect(ctx.destination);
+      o.type='sine';o.frequency.value=freq;
+      g.gain.setValueAtTime(0,ctx.currentTime+start);
+      g.gain.linearRampToValueAtTime(0.45,ctx.currentTime+start+0.02);
+      g.gain.linearRampToValueAtTime(0,ctx.currentTime+start+dur);
+      o.start(ctx.currentTime+start);o.stop(ctx.currentTime+start+dur+0.05);
+    };
+    beep(880,0,0.18);beep(880,0.22,0.18);beep(1100,0.48,0.35);
+    setTimeout(()=>ctx.close(),1500);
+  }catch(e){}
+  toast('✅ '+name+' — COMPLETATO! 🔔');
+}
+function startTiv(){if(tIv)return;tIv=setInterval(()=>{let any=false;timers.forEach(t=>{if(t.running&&!t.done){t.remaining--;any=true;if(t.remaining<=0){t.remaining=0;t.running=false;t.done=true;alertTimer(t.name);}}});renderTimers();if(!any){clearInterval(tIv);tIv=null;}},1000);}
 function togTimer(id){const t=timers.find(x=>x.id===id);if(!t||t.done)return;t.running=!t.running;if(t.running)startTiv();renderTimers();}
 function rstTimer(id){const t=timers.find(x=>x.id===id);if(!t)return;t.remaining=t.total;t.running=false;t.done=false;renderTimers();}
 function delTimer(id){timers=timers.filter(x=>x.id!==id);renderTimers();}
@@ -559,14 +622,76 @@ function calcPCR(){
   if(h2o<0){toast('⚠️ Somma supera vol. totale!');return;}
   sr('rPcr',`<strong>Master Mix — ${n} camp. (+${Math.round(ex*100)}% = ${nEx.toFixed(1)} rxn):</strong><br><br>${reag.map(r=>`${r[0]}: <span class="rv">${(r[1]*nEx).toFixed(1)} µL</span> (${r[1]} µL/rxn)<br>`).join('')}H₂O: <span class="rv">${(h2o*nEx).toFixed(1)} µL</span> (${h2o.toFixed(1)} µL/rxn)<br><hr style="border-color:#333;margin:.4rem 0">→ <strong>${dna} µL DNA</strong>/pozzetto · Vol: <strong>${vol} µL</strong>`);
 }
-function calcCV(){
-  const c1=parseFloat(document.getElementById('cvC1').value),v1=document.getElementById('cvV1').value,c2=parseFloat(document.getElementById('cvC2').value),v2=document.getElementById('cvV2').value;
-  let html='';
-  if(!v1&&!isNaN(c1)&&!isNaN(c2)&&!isNaN(parseFloat(v2))){const r=(c2*parseFloat(v2))/c1;html=`V₁ = <span class="rv">${r.toFixed(3)}</span> µL stock<br>+ ${(parseFloat(v2)-r).toFixed(3)} µL solvente`;}
-  else if(!v2&&!isNaN(c1)&&!isNaN(c2)&&!isNaN(parseFloat(v1))){html=`V₂ = <span class="rv">${((c1*parseFloat(v1))/c2).toFixed(3)}</span> µL finali`;}
-  else{toast('⚠️ Lascia vuoto solo il campo da calcolare');return;}
-  sr('rCv',html);
+function applyPreset(){
+  const preset=document.getElementById('cvPreset').value;
+  if(!preset||preset==='custom'){
+    if(preset==='custom'){document.getElementById('cvC1').value='';document.getElementById('cvC1').focus();}
+    return;
+  }
+  document.getElementById('cvC1').value=preset;
+  cvAutoCalc();
 }
+
+function cvAutoCalc(){
+  const unit=document.getElementById('cvUnit').value;
+  const c1=parseFloat(document.getElementById('cvC1').value);
+  const v1raw=document.getElementById('cvV1').value;
+  const c2=parseFloat(document.getElementById('cvC2').value);
+  const v2raw=document.getElementById('cvV2').value;
+  const v1=parseFloat(v1raw), v2=parseFloat(v2raw);
+
+  // Update labels dynamically
+  document.getElementById('cvV1lbl').textContent=`V₁ (${unit}) — lascia vuoto per calcolare`;
+  document.getElementById('cvV2lbl').textContent=`V₂ (${unit}) — lascia vuoto per calcolare`;
+
+  const rbox=document.getElementById('rCv');
+
+  // Need exactly one empty volume field and both concentrations
+  const v1empty=v1raw.trim()==='';
+  const v2empty=v2raw.trim()==='';
+
+  if(isNaN(c1)||isNaN(c2)){rbox.classList.remove('show');return;}
+  if(c1<=0||c2<=0){rbox.classList.remove('show');return;}
+
+  if(v1empty&&!v2empty&&!isNaN(v2)){
+    // Calculate V1
+    const r=(c2*v2)/c1;
+    const solvent=v2-r;
+    const dilution=(c1/c2).toFixed(1);
+    const html=`V₁ = <span class="rv">${fmtVol(r,unit)}</span> di stock (${c1}×)<br>`
+      +`Aggiungere: <span class="rv">${fmtVol(Math.max(0,solvent),unit)}</span> solvente<br>`
+      +`→ Vol. finale: <strong>${fmtVol(v2,unit)}</strong> @ C₂ = <strong>${c2}×</strong><br>`
+      +`<span style="opacity:.65;font-size:.7rem">Diluizione: 1:${dilution}</span>`;
+    sr('rCv',html);
+  } else if(v2empty&&!v1empty&&!isNaN(v1)){
+    // Calculate V2
+    const r=(c1*v1)/c2;
+    const dilution=(c1/c2).toFixed(1);
+    const html=`V₂ = <span class="rv">${fmtVol(r,unit)}</span> vol. finale<br>`
+      +`Prelevare <strong>${fmtVol(v1,unit)}</strong> di stock (${c1}×)<br>`
+      +`<span style="opacity:.65;font-size:.7rem">Diluizione: 1:${dilution}</span>`;
+    sr('rCv',html);
+  } else if(!v1empty&&!v2empty&&!isNaN(v1)&&!isNaN(v2)){
+    // Both filled — verify the equation and show ratio
+    const lhs=c1*v1, rhs=c2*v2;
+    const ok=Math.abs(lhs-rhs)<0.0001*Math.max(lhs,rhs);
+    const html=ok
+      ?`✅ Equazione verificata<br>C₁·V₁ = <span class="rv">${lhs.toFixed(4)}</span> = C₂·V₂`
+      :`⚠️ Equazione <em>non</em> bilanciata<br>C₁·V₁ = ${lhs.toFixed(4)} ≠ C₂·V₂ = ${rhs.toFixed(4)}<br><span style="opacity:.65;font-size:.7rem">Lascia vuoto V₁ o V₂ per calcolarlo</span>`;
+    sr('rCv',html);
+  } else {
+    rbox.classList.remove('show');
+  }
+}
+
+function fmtVol(val,unit){
+  if(isNaN(val))return'—';
+  // Format: avoid too many decimals, use locale-friendly notation
+  const decimals=val<1?4:val<10?3:2;
+  return val.toFixed(decimals)+' '+unit;
+}
+
+function calcCV(){cvAutoCalc();}
 function calcGelPrep(){
   const vol=parseFloat(document.getElementById('gVol').value),pct=parseFloat(document.getElementById('gPct').value);
   if([vol,pct].some(isNaN)){toast('⚠️ Compila i campi');return;}
@@ -613,7 +738,7 @@ function renderMyPs(){
 
 // ===== PLATE MAP =====
 const PLATE_CONFIGS={
-  4:{rows:1,cols:4},6:{rows:2,cols:3},12:{rows:3,cols:4},24:{rows:4,cols:6},
+  4:{rows:2,cols:2},6:{rows:2,cols:3},12:{rows:3,cols:4},24:{rows:4,cols:6},
   48:{rows:6,cols:8},96:{rows:8,cols:12},384:{rows:16,cols:24}
 };
 const ROWLBLS=['A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P'];
@@ -648,8 +773,16 @@ function renderPlate(){
 
   // grid
   const grid=document.getElementById('plateGrid');
-  const minW=curPlate===384?12:curPlate===96?18:24;
+  const minW=curPlate===384?12:curPlate===96?18:curPlate===4?72:24;
   grid.style.gridTemplateColumns=`18px repeat(${cols},1fr)`;
+  // For 4-well: limit width and center
+  if(curPlate===4){
+    grid.style.maxWidth='180px';
+    grid.style.margin='0 auto .7rem';
+  } else {
+    grid.style.maxWidth='';
+    grid.style.margin='';
+  }
   grid.innerHTML='';
   grid.appendChild(Object.assign(document.createElement('div'),{className:'pcol-h'}));
   for(let c=1;c<=cols;c++)grid.appendChild(Object.assign(document.createElement('div'),{className:'pcol-h',textContent:c}));
@@ -657,7 +790,7 @@ function renderPlate(){
     grid.appendChild(Object.assign(document.createElement('div'),{className:'prow-h',textContent:ROWLBLS[r]}));
     for(let c=1;c<=cols;c++){
       const key=ROWLBLS[r]+c,d=plateData[key],w=document.createElement('div');
-      w.className='well';w.style.minWidth=minW+'px';w.title=key+(d?.label?': '+d.label:'');
+      w.className='well';w.style.minWidth=minW+'px';w.style.height=minW+'px';w.title=key+(d?.label?': '+d.label:'');
       if(d?.color){w.style.background=d.color;w.style.borderColor=d.color;}
       w.textContent=d?.label?d.label.substring(0,curPlate>=96?2:3):'';
       w.onclick=()=>paintWell(key);grid.appendChild(w);
@@ -788,8 +921,81 @@ function renderGel(){
   inner.innerHTML=`<div style="position:relative;min-width:36px;height:${GEL_H+18}px"><div style="position:absolute;top:18px;right:0;height:${GEL_H}px;width:36px">${LADDER.map(t=>`<div style="position:absolute;top:calc(${bp2pct(t.bp)}% - 6px);right:3px;font-size:.46rem;color:var(--muted);line-height:1;text-align:right">${t.bp}</div>`).join('')}</div></div>${ladderHtml}${lanesHtml}`;
 }
 
-// ===== INIT =====
-renderTimers();renderSamples();renderProtos();renderMyPs();renderPlate();renderCells();renderGel();
+// ===== PERSISTENZA localStorage =====
+const LS={
+  save(key,val){try{localStorage.setItem('la_'+key,JSON.stringify(val));}catch(e){}},
+  load(key,def){try{const v=localStorage.getItem('la_'+key);return v!=null?JSON.parse(v):def;}catch(e){return def;}}
+};
+
+// Wrap render functions to auto-save after every change
+const _rTim=renderTimers;
+renderTimers=function(){_rTim();LS.save('timers',timers.map(t=>({...t,running:false})));};
+
+const _rSam=renderSamples;
+renderSamples=function(){_rSam();LS.save('samples',samples);};
+
+const _rMyP=renderMyPs;
+renderMyPs=function(){_rMyP();LS.save('myPs',myPs);};
+
+const _rCells=renderCells;
+renderCells=function(){_rCells();LS.save('cellLines',cellLines);};
+
+const _rPlate=renderPlate;
+renderPlate=function(){_rPlate();LS.save('plateData',{plateData,legendMap,curPlate,plateColor});};
+
+const _rGel=renderGel;
+renderGel=function(){_rGel();LS.save('gel',{gelLanes,gelCfg});};
+
+// ===== INIT — carica dati salvati =====
+(function(){
+  // Timers (quelli in esecuzione vengono messi in pausa al riavvio)
+  timers=LS.load('timers',[]);
+  timers.forEach(t=>{t.running=false;});
+
+  // Campioni
+  samples=LS.load('samples',[]);
+
+  // I miei protocolli
+  myPs=LS.load('myPs',[]);
+
+  // Cell culture
+  cellLines=LS.load('cellLines',[]);
+
+  // Plate map
+  const ps=LS.load('plateData',null);
+  if(ps){
+    plateData=ps.plateData||{};
+    legendMap=ps.legendMap||{};
+    plateColor=ps.plateColor||PALETTE[0];
+    curPlate=ps.curPlate||4;
+    // Aggiorna il tab attivo
+    document.querySelectorAll('.pt-tab').forEach(t=>t.classList.remove('active'));
+    const tabMap={4:0,6:1,12:2,24:3,48:4,96:5,384:6};
+    const tabs=document.querySelectorAll('.pt-tab');
+    if(tabs[tabMap[curPlate]])tabs[tabMap[curPlate]].classList.add('active');
+  }
+
+  // Gel
+  const gs=LS.load('gel',null);
+  if(gs){
+    gelLanes=gs.gelLanes||[];
+    gelCfg=gs.gelCfg||{name:'Gel 1',n:6,color:'#5c6bc0'};
+    // Ripristina i campi configurazione
+    document.getElementById('gelName').value=gelCfg.name;
+    document.getElementById('gelN').value=gelCfg.n;
+    document.getElementById('gelColor').value=gelCfg.color;
+    if(gelLanes.length){
+      document.getElementById('gelLaneSel').innerHTML=gelLanes.map(l=>`<option value="${l.id}">Corsia ${l.id}</option>`).join('');
+    }
+  }
+
+  // Render tutto
+  renderTimers();renderSamples();renderProtos();renderMyPs();renderPlate();renderCells();renderGel();
+
+  // Mostra quanti dati sono stati ripristinati
+  const tot=samples.length+myPs.length+cellLines.length+gelLanes.length;
+  if(tot>0) setTimeout(()=>toast('💾 Dati ripristinati'),600);
+})();
 </script>
 </body>
 </html>
