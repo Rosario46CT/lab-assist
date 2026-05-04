@@ -20,7 +20,7 @@
 body{background:var(--bg);color:var(--text);font-family:'Syne',sans-serif;min-height:100vh;max-width:500px;margin:0 auto;}
 .view{display:none;}.view.active{display:block;animation:slideIn .25s ease;}
 @keyframes slideIn{from{opacity:0;transform:translateX(14px)}to{opacity:1;transform:translateX(0)}}
-@keyframes fadeIn{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
+@keyframes alarmPulse{from{opacity:1;transform:scale(1)}to{opacity:.6;transform:scale(1.06)}}
 
 /* STATUS BAR */
 .bar{background:#1a1a20;color:#fff;padding:.65rem 1.2rem;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:200;}
@@ -142,7 +142,13 @@ textarea{resize:vertical;min-height:65px;}
 .asr{display:flex;gap:.35rem;margin-top:.6rem;flex-wrap:wrap;}
 .asr input{flex:1;min-width:100px;}
 
-/* CALC TABS */
+/* TIMER SPINNER */
+.spin-btn{background:var(--bg);border:1.5px solid var(--border);border-radius:8px;width:46px;height:28px;font-size:.85rem;cursor:pointer;color:var(--text);display:flex;align-items:center;justify-content:center;transition:background .12s;}
+.spin-btn:active{background:var(--border);}
+.spin-input{width:64px;height:56px;text-align:center;font-family:'JetBrains Mono',monospace;font-size:1.7rem;font-weight:700;border-radius:12px;border:2px solid var(--border);background:var(--surface);color:var(--text);padding:0 18px 0 4px;-moz-appearance:textfield;}
+.spin-input:focus{border-color:#7c6fff;}
+.spin-input::-webkit-inner-spin-button,.spin-input::-webkit-outer-spin-button{-webkit-appearance:none;}
+.spin-lbl{position:absolute;right:6px;bottom:7px;font-size:.58rem;font-weight:700;color:var(--muted);font-family:'Syne',sans-serif;letter-spacing:.5px;text-transform:uppercase;}
 .ctabs{display:flex;gap:.35rem;margin-bottom:.9rem;flex-wrap:wrap;}
 .ctab{padding:.35rem .8rem;border-radius:20px;font-size:.68rem;font-weight:700;cursor:pointer;border:1.5px solid var(--border);background:transparent;color:var(--muted);font-family:'Syne',sans-serif;transition:all .2s;}
 .ctab.active{background:#1a1a20;color:#fff;border-color:#1a1a20;}
@@ -232,13 +238,58 @@ textarea{resize:vertical;min-height:65px;}
   <div class="ptitle"><div class="pdot" style="background:#ee5a24"></div>Timer Multipli</div>
   <div class="tgrid" id="tGrid"></div>
   <div class="card"><div class="ctitle">➕ Nuovo Timer</div>
-    <div class="frow">
-      <div><label>Nome</label><input id="tName" placeholder="es. Ibridazione FISH"></div>
-      <div><label>Ore</label><input type="number" id="tH" min="0" value="0"></div>
-      <div><label>Min</label><input type="number" id="tM" min="0" max="59" value="5"></div>
-      <div><label>Sec</label><input type="number" id="tS" min="0" max="59" value="0"></div>
+    <!-- Nome -->
+    <div style="margin-bottom:.75rem">
+      <label>Nome</label>
+      <input id="tName" placeholder="es. Ibridazione FISH">
     </div>
-    <button class="btn btn-g" onclick="addTimer()">▶ Avvia</button>
+    <!-- Preset rapidi -->
+    <div style="margin-bottom:.85rem">
+      <label>Preset rapidi</label>
+      <div style="display:flex;gap:.4rem;flex-wrap:wrap">
+        <button class="btn btn-o btn-sm" onclick="setTimerPreset(0,1,0)">1 min</button>
+        <button class="btn btn-o btn-sm" onclick="setTimerPreset(0,2,0)">2 min</button>
+        <button class="btn btn-o btn-sm" onclick="setTimerPreset(0,3,0)">3 min</button>
+        <button class="btn btn-o btn-sm" onclick="setTimerPreset(0,5,0)">5 min</button>
+        <button class="btn btn-o btn-sm" onclick="setTimerPreset(0,10,0)">10 min</button>
+        <button class="btn btn-o btn-sm" onclick="setTimerPreset(0,15,0)">15 min</button>
+        <button class="btn btn-o btn-sm" onclick="setTimerPreset(0,30,0)">30 min</button>
+        <button class="btn btn-o btn-sm" onclick="setTimerPreset(1,0,0)">1 ora</button>
+      </div>
+    </div>
+    <!-- Spinner ORE:MIN:SEC -->
+    <div style="display:flex;align-items:center;justify-content:center;gap:.5rem;margin-bottom:.9rem">
+      <!-- ORE -->
+      <div style="display:flex;flex-direction:column;align-items:center;gap:.15rem">
+        <button class="spin-btn" onclick="spinAdj('tH',1)">▲</button>
+        <div style="position:relative">
+          <input id="tH" type="number" min="0" max="23" value="0" class="spin-input" oninput="clampSpin('tH',0,23)">
+          <span class="spin-lbl">h</span>
+        </div>
+        <button class="spin-btn" onclick="spinAdj('tH',-1)">▼</button>
+      </div>
+      <span style="font-family:'JetBrains Mono',monospace;font-size:1.6rem;font-weight:700;color:var(--muted);margin-bottom:4px">:</span>
+      <!-- MIN -->
+      <div style="display:flex;flex-direction:column;align-items:center;gap:.15rem">
+        <button class="spin-btn" onclick="spinAdj('tM',1)">▲</button>
+        <div style="position:relative">
+          <input id="tM" type="number" min="0" max="59" value="5" class="spin-input" oninput="clampSpin('tM',0,59)">
+          <span class="spin-lbl">m</span>
+        </div>
+        <button class="spin-btn" onclick="spinAdj('tM',-1)">▼</button>
+      </div>
+      <span style="font-family:'JetBrains Mono',monospace;font-size:1.6rem;font-weight:700;color:var(--muted);margin-bottom:4px">:</span>
+      <!-- SEC -->
+      <div style="display:flex;flex-direction:column;align-items:center;gap:.15rem">
+        <button class="spin-btn" onclick="spinAdj('tS',1)">▲</button>
+        <div style="position:relative">
+          <input id="tS" type="number" min="0" max="59" value="0" class="spin-input" oninput="clampSpin('tS',0,59)">
+          <span class="spin-lbl">s</span>
+        </div>
+        <button class="spin-btn" onclick="spinAdj('tS',-1)">▼</button>
+      </div>
+    </div>
+    <button class="btn btn-g" style="width:100%" onclick="addTimer()">▶ Avvia Timer</button>
   </div>
 </div></div>
 
@@ -531,37 +582,70 @@ function addTimer(){
   timers.push({id:Date.now(),name,total,remaining:total,running:false,done:false});
   renderTimers();startTiv();document.getElementById('tName').value='';
 }
-function alertTimer(name){
-  // Vibration (Android + some PWA)
-  if(navigator.vibrate){navigator.vibrate([400,150,400,150,600]);}
-  // Beep via Web Audio API (works on iOS too)
+// Track active alarms: timerId -> {vibIv, beepIv, ctx}
+const activeAlarms={};
+
+function alertTimer(name,timerId){
+  // --- Vibration loop (Android + PWA) ---
+  if(navigator.vibrate){
+    navigator.vibrate([400,150,400,150,600]);
+  }
+  const vibIv=setInterval(()=>{
+    if(navigator.vibrate) navigator.vibrate([400,150,400,150,600]);
+  },2000);
+
+  // --- Beep loop via Web Audio API ---
+  let ctx=null;
+  let beepIv=null;
   try{
-    const ctx=new(window.AudioContext||window.webkitAudioContext)();
-    const beep=(freq,start,dur)=>{
-      const o=ctx.createOscillator(),g=ctx.createGain();
-      o.connect(g);g.connect(ctx.destination);
-      o.type='sine';o.frequency.value=freq;
-      g.gain.setValueAtTime(0,ctx.currentTime+start);
-      g.gain.linearRampToValueAtTime(0.45,ctx.currentTime+start+0.02);
-      g.gain.linearRampToValueAtTime(0,ctx.currentTime+start+dur);
-      o.start(ctx.currentTime+start);o.stop(ctx.currentTime+start+dur+0.05);
+    ctx=new(window.AudioContext||window.webkitAudioContext)();
+    const playBeeps=()=>{
+      try{
+        const now=ctx.currentTime;
+        const beep=(freq,start,dur)=>{
+          const o=ctx.createOscillator(),g=ctx.createGain();
+          o.connect(g);g.connect(ctx.destination);
+          o.type='sine';o.frequency.value=freq;
+          g.gain.setValueAtTime(0,now+start);
+          g.gain.linearRampToValueAtTime(0.45,now+start+0.02);
+          g.gain.linearRampToValueAtTime(0,now+start+dur);
+          o.start(now+start);o.stop(now+start+dur+0.05);
+        };
+        beep(880,0,0.18);beep(880,0.22,0.18);beep(1100,0.48,0.35);
+      }catch(e){}
     };
-    beep(880,0,0.18);beep(880,0.22,0.18);beep(1100,0.48,0.35);
-    setTimeout(()=>ctx.close(),1500);
+    playBeeps();
+    beepIv=setInterval(playBeeps,2000);
   }catch(e){}
-  toast('✅ '+name+' — COMPLETATO! 🔔');
+
+  activeAlarms[timerId]={vibIv,beepIv,ctx};
+  toast('🔔 '+name+' — COMPLETATO! Premi STOP');
 }
-function startTiv(){if(tIv)return;tIv=setInterval(()=>{let any=false;timers.forEach(t=>{if(t.running&&!t.done){t.remaining--;any=true;if(t.remaining<=0){t.remaining=0;t.running=false;t.done=true;alertTimer(t.name);}}});renderTimers();if(!any){clearInterval(tIv);tIv=null;}},1000);}
+
+function stopAlarm(timerId){
+  const alarm=activeAlarms[timerId];
+  if(!alarm) return;
+  clearInterval(alarm.vibIv);
+  clearInterval(alarm.beepIv);
+  if(navigator.vibrate) navigator.vibrate(0);
+  try{if(alarm.ctx) alarm.ctx.close();}catch(e){}
+  delete activeAlarms[timerId];
+  renderTimers();
+}
+function spinAdj(id,delta){const el=document.getElementById(id);const max=id==='tH'?23:59;let v=(parseInt(el.value)||0)+delta;if(v<0)v=max;if(v>max)v=0;el.value=String(v).padStart(2,'0');}
+function clampSpin(id,mn,mx){const el=document.getElementById(id);let v=parseInt(el.value);if(isNaN(v))v=mn;el.value=Math.max(mn,Math.min(mx,v));}
+function setTimerPreset(h,m,s){document.getElementById('tH').value=String(h).padStart(2,'0');document.getElementById('tM').value=String(m).padStart(2,'0');document.getElementById('tS').value=String(s).padStart(2,'0');}
+function startTiv(){if(tIv)return;tIv=setInterval(()=>{let any=false;timers.forEach(t=>{if(t.running&&!t.done){t.remaining--;any=true;if(t.remaining<=0){t.remaining=0;t.running=false;t.done=true;alertTimer(t.name,t.id);}}});renderTimers();if(!any){clearInterval(tIv);tIv=null;}},1000);}
 function togTimer(id){const t=timers.find(x=>x.id===id);if(!t||t.done)return;t.running=!t.running;if(t.running)startTiv();renderTimers();}
-function rstTimer(id){const t=timers.find(x=>x.id===id);if(!t)return;t.remaining=t.total;t.running=false;t.done=false;renderTimers();}
-function delTimer(id){timers=timers.filter(x=>x.id!==id);renderTimers();}
+function rstTimer(id){stopAlarm(id);const t=timers.find(x=>x.id===id);if(!t)return;t.remaining=t.total;t.running=false;t.done=false;renderTimers();}
+function delTimer(id){stopAlarm(id);timers=timers.filter(x=>x.id!==id);renderTimers();}
 function fmtT(s){const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),sec=s%60;return h>0?`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`:`${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`;}
 function renderTimers(){
   const g=document.getElementById('tGrid');
   if(!timers.length){g.innerHTML='<div style="color:var(--muted);font-size:.8rem">Nessun timer attivo</div>';return;}
   g.innerHTML='';
   timers.forEach(t=>{const pct=(t.remaining/t.total)*100,cls=t.done?'done':t.running?'running':'';
-    g.innerHTML+=`<div class="tcard ${cls}"><button class="tdel" onclick="delTimer(${t.id})">✕</button><div class="tname">${t.name}</div><div class="tdisp">${fmtT(t.remaining)}</div><div class="tprog"><div class="tpbar" style="width:${pct}%"></div></div><div class="tbtns">${t.done?'<span style="font-size:.75rem;font-weight:700;color:#e17055">✅ COMPLETATO</span>':`<button class="btn btn-sm" onclick="togTimer(${t.id})">${t.running?'⏸ Pausa':'▶ Avvia'}</button>`}<button class="btn btn-sm btn-o" onclick="rstTimer(${t.id})">↺</button></div></div>`;
+    g.innerHTML+=`<div class="tcard ${cls}"><button class="tdel" onclick="delTimer(${t.id})">✕</button><div class="tname">${t.name}</div><div class="tdisp">${fmtT(t.remaining)}</div><div class="tprog"><div class="tpbar" style="width:${pct}%"></div></div><div class="tbtns">${t.done?(activeAlarms[t.id]?`<button class="btn btn-r btn-sm" style="animation:alarmPulse .6s infinite alternate" onclick="stopAlarm(${t.id})">🔔 STOP</button>`:'<span style="font-size:.75rem;font-weight:700;color:#e17055">✅ COMPLETATO</span>'):`<button class="btn btn-sm" onclick="togTimer(${t.id})">${t.running?'⏸ Pausa':'▶ Avvia'}</button>`}<button class="btn btn-sm btn-o" onclick="rstTimer(${t.id})">↺</button></div></div>`;
   });
 }
 
