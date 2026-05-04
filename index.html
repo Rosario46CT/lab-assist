@@ -199,13 +199,11 @@ textarea{resize:vertical;min-height:65px;}
 .gband{position:absolute;left:3px;right:3px;height:5px;border-radius:3px;cursor:pointer;}
 .gband:active{opacity:.6;}
 /* LAB MODAL */
-.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:500;display:flex;align-items:center;justify-content:center;padding:1.2rem;}
-.modal-box{background:var(--surface);border-radius:20px;padding:1.5rem;width:100%;max-width:360px;box-shadow:0 8px 40px rgba(0,0,0,.25);}
-.modal-title{font-size:1.1rem;font-weight:800;margin-bottom:.3rem;}
-.modal-sub{font-size:.75rem;color:var(--muted);margin-bottom:1.2rem;line-height:1.5;}
-.sync-dot{width:7px;height:7px;border-radius:50%;background:#7dffb3;display:inline-block;margin-left:.35rem;animation:syncpulse 1.5s infinite;}
-@keyframes syncpulse{0%,100%{opacity:1}50%{opacity:.25}}
-.lab-chip{display:inline-flex;align-items:center;gap:.35rem;background:linear-gradient(135deg,#7c6fff22,#5a4dce11);border:1.5px solid #7c6fff55;color:#5a4dce;padding:.28rem .75rem;border-radius:20px;font-size:.7rem;font-weight:700;cursor:pointer;}
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:500;display:flex;align-items:center;justify-content:center;padding:1.2rem;}
+.modal-box{background:var(--surface);border-radius:20px;padding:1.5rem;width:100%;max-width:340px;box-shadow:0 8px 40px rgba(0,0,0,.3);}
+.modal-title{font-size:1.1rem;font-weight:800;margin-bottom:.4rem;}
+.modal-sub{font-size:.75rem;color:var(--muted);margin-bottom:1.1rem;line-height:1.55;}
+.lab-chip{font-size:.65rem;font-weight:700;color:rgba(255,255,255,.7);cursor:pointer;border:1px solid rgba(255,255,255,.2);padding:.2rem .55rem;border-radius:20px;}
 </style>
 </head>
 <body>
@@ -213,9 +211,7 @@ textarea{resize:vertical;min-height:65px;}
 <div class="bar">
   <button class="back" id="backBtn" onclick="goHome()">← Home</button>
   <div class="bar-title">🧬 <span>Lab</span>Assist</div>
-  <div style="display:flex;align-items:center;gap:.5rem">
-    <span class="lab-chip" id="labChip" onclick="window.showLabModal&&window.showLabModal()">🧬 —</span>
-  </div>
+  <span class="lab-chip" id="labChip" onclick="showLabModal()">🧬 —</span>
 </div>
 
 <!-- HOME -->
@@ -558,110 +554,6 @@ textarea{resize:vertical;min-height:65px;}
 </div></div>
 
 <div class="toast" id="toast"></div>
-
-<!-- LAB SETUP MODAL -->
-<div class="modal-overlay" id="labModal" style="display:none">
-  <div class="modal-box">
-    <div class="modal-title">🧬 Benvenuto in LabAssist</div>
-    <div class="modal-sub">Inserisci il codice del tuo lab per sincronizzare campioni, protocolli e cell culture con il tuo team.<br><br>Se non hai un codice, creane uno nuovo e condividilo con i colleghi!</div>
-    <div style="margin-bottom:.6rem">
-      <label>Codice Lab</label>
-      <input id="labCodeInput" placeholder="es. LAB-ROSSI-2024" style="text-transform:uppercase;letter-spacing:1px">
-    </div>
-    <div style="display:flex;gap:.5rem;margin-bottom:.8rem">
-      <button class="btn btn-v" style="flex:1" onclick="joinLab()">🔗 Entra nel Lab</button>
-      <button class="btn btn-g" style="flex:1" onclick="createLab()">✨ Crea Nuovo</button>
-    </div>
-    <div style="font-size:.62rem;color:var(--muted);text-align:center">Timer e Gel restano sempre locali</div>
-  </div>
-</div>
-
-<!-- Firebase compat SDK (works with regular scripts, no module needed) -->
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
-
-<script>
-// ===== FIREBASE INIT =====
-const firebaseConfig = {
-  apiKey: "AIzaSyAmH0ymEu_1NScs1EcfUjAIW1Z683TCck4",
-  authDomain: "lab-assist-eabca.firebaseapp.com",
-  projectId: "lab-assist-eabca",
-  storageBucket: "lab-assist-eabca.firebasestorage.app",
-  messagingSenderId: "279556842570",
-  appId: "1:279556842570:web:90e045c8cc6c06e095b2b3"
-};
-firebase.initializeApp(firebaseConfig);
-const db = firebase.firestore();
-
-let LAB_ID = null;
-let fbUnsubs = [];
-
-function genLabCode(){
-  const words=['ALPHA','BETA','GAMMA','DELTA','SIGMA','OMEGA','NOVA','HELIX','ZETA','KAPPA'];
-  return words[Math.floor(Math.random()*words.length)]+'-'+Math.floor(100+Math.random()*900);
-}
-
-function showLabModal(){document.getElementById('labModal').style.display='flex';}
-function hideLabModal(){document.getElementById('labModal').style.display='none';}
-
-function createLab(){
-  document.getElementById('labCodeInput').value=genLabCode();
-  toast('✨ Codice generato! Condividilo con il team');
-}
-
-function joinLab(){
-  const code=document.getElementById('labCodeInput').value.trim().toUpperCase();
-  if(!code){toast('⚠️ Inserisci un codice');return;}
-  LAB_ID=code;
-  localStorage.setItem('la_labId',code);
-  hideLabModal();
-  updateLabChip();
-  startFirestoreListeners();
-  toast('🔗 Lab: '+code);
-}
-
-function updateLabChip(){
-  const el=document.getElementById('labChip');
-  if(el) el.textContent='🧬 '+(LAB_ID||'—');
-}
-
-// ===== FIRESTORE SAVE =====
-async function fbSave(colName, items){
-  if(!LAB_ID||!items) return;
-  try{
-    const colRef=db.collection('labs').doc(LAB_ID).collection(colName);
-    const snap=await colRef.get();
-    const batch=db.batch();
-    snap.docs.forEach(d=>batch.delete(d.ref));
-    items.forEach(item=>{
-      const id=String(item.id||item.name||item.lineId||Date.now()+Math.random());
-      batch.set(colRef.doc(id), JSON.parse(JSON.stringify(item)));
-    });
-    await batch.commit();
-  }catch(e){console.warn('fbSave error',e);}
-}
-
-// ===== FIRESTORE LISTENERS =====
-function startFirestoreListeners(){
-  fbUnsubs.forEach(u=>u());
-  fbUnsubs=[];
-  const labRef=db.collection('labs').doc(LAB_ID);
-
-  fbUnsubs.push(labRef.collection('samples').onSnapshot(snap=>{
-    samples=snap.docs.map(d=>d.data());
-    _renderSamples();
-  }));
-  fbUnsubs.push(labRef.collection('myPs').onSnapshot(snap=>{
-    myPs=snap.docs.map(d=>d.data());
-    _renderMyPs();
-  }));
-  fbUnsubs.push(labRef.collection('cellLines').onSnapshot(snap=>{
-    cellLines=snap.docs.map(d=>d.data());
-    _renderCells();
-  }));
-}
-
-</script>
 
 <script>
 // ===== NAV =====
@@ -1129,14 +1021,14 @@ const LS={
 const _rTim=renderTimers;
 renderTimers=function(){_rTim();LS.save('timers',timers.map(t=>({...t,running:false})));};
 
-const _renderSamples=renderSamples;
-renderSamples=function(){_renderSamples();LS.save('samples',samples);if(LAB_ID)fbSave('samples',samples);};
+const _rSam=renderSamples;
+renderSamples=function(){_rSam();LS.save('samples',samples);};
 
-const _renderMyPs=renderMyPs;
-renderMyPs=function(){_renderMyPs();LS.save('myPs',myPs);if(LAB_ID)fbSave('myPs',myPs);};
+const _rMyP=renderMyPs;
+renderMyPs=function(){_rMyP();LS.save('myPs',myPs);};
 
-const _renderCells=renderCells;
-renderCells=function(){_renderCells();LS.save('cellLines',cellLines);if(LAB_ID)fbSave('cellLines',cellLines);};
+const _rCells=renderCells;
+renderCells=function(){_rCells();LS.save('cellLines',cellLines);};
 
 const _rPlate=renderPlate;
 renderPlate=function(){_rPlate();LS.save('plateData',{plateData,legendMap,curPlate,plateColor});};
@@ -1188,20 +1080,110 @@ renderGel=function(){_rGel();LS.save('gel',{gelLanes,gelCfg});};
   }
 
   // Render tutto
-  renderTimers();_renderSamples();renderProtos();_renderMyPs();renderPlate();_renderCells();renderGel();
+  renderTimers();renderSamples();renderProtos();renderMyPs();renderPlate();renderCells();renderGel();
 
   // Mostra quanti dati sono stati ripristinati
   const tot=samples.length+myPs.length+cellLines.length+gelLanes.length;
   if(tot>0) setTimeout(()=>toast('💾 Dati ripristinati'),600);
+})();
+<!-- LAB MODAL -->
+<div class="modal-overlay" id="labModal" style="display:none">
+  <div class="modal-box">
+    <div class="modal-title">🧬 Benvenuto in LabAssist</div>
+    <div class="modal-sub">Inserisci il codice del tuo lab per sincronizzare campioni, protocolli e cell culture con il team.<br><br>Non hai un codice? Creane uno e condividilo con i colleghi!</div>
+    <div style="margin-bottom:.7rem">
+      <label>Codice Lab</label>
+      <input id="labCodeInput" placeholder="es. LAB-ROSSI-2024" style="text-transform:uppercase;letter-spacing:1px">
+    </div>
+    <div style="display:flex;gap:.5rem;margin-bottom:.75rem">
+      <button class="btn btn-v" style="flex:1" onclick="joinLab()">🔗 Entra</button>
+      <button class="btn btn-g" style="flex:1" onclick="createLabCode()">✨ Crea codice</button>
+    </div>
+    <div style="font-size:.62rem;color:var(--muted);text-align:center">Timer e Gel restano sempre locali sul dispositivo</div>
+  </div>
+</div>
 
-  // Firebase lab init
-  const savedLab=localStorage.getItem('la_labId');
-  if(savedLab){
-    LAB_ID=savedLab;
-    updateLabChip();
-    startFirestoreListeners();
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<script>
+// ===== FIREBASE =====
+firebase.initializeApp({
+  apiKey:"AIzaSyAmH0ymEu_1NScs1EcfUjAIW1Z683TCck4",
+  authDomain:"lab-assist-eabca.firebaseapp.com",
+  projectId:"lab-assist-eabca",
+  storageBucket:"lab-assist-eabca.firebasestorage.app",
+  messagingSenderId:"279556842570",
+  appId:"1:279556842570:web:90e045c8cc6c06e095b2b3"
+});
+const db=firebase.firestore();
+let LAB_ID=null, fbUnsubs=[], fbUpdating=false;
+
+function showLabModal(){document.getElementById('labModal').style.display='flex';}
+function hideLabModal(){document.getElementById('labModal').style.display='none';}
+
+function createLabCode(){
+  const w=['ALPHA','BETA','GAMMA','DELTA','SIGMA','OMEGA','NOVA','HELIX','ZETA','KAPPA'];
+  document.getElementById('labCodeInput').value=w[Math.floor(Math.random()*w.length)]+'-'+Math.floor(100+Math.random()*900);
+  toast('✨ Codice generato! Condividilo con il team');
+}
+
+function joinLab(){
+  const code=document.getElementById('labCodeInput').value.trim().toUpperCase();
+  if(!code){toast('⚠️ Inserisci un codice');return;}
+  LAB_ID=code;
+  localStorage.setItem('la_labId',code);
+  hideLabModal();
+  document.getElementById('labChip').textContent='🧬 '+code;
+  startFbListeners();
+  toast('🔗 Lab: '+code);
+}
+
+async function fbSave(col,items){
+  if(!LAB_ID||fbUpdating) return;
+  try{
+    const ref=db.collection('labs').doc(LAB_ID).collection(col);
+    const snap=await ref.get();
+    const batch=db.batch();
+    snap.docs.forEach(d=>batch.delete(d.ref));
+    items.forEach((item,i)=>{
+      const id=String(item.id||item.name||item.lineId||i);
+      batch.set(ref.doc(id), JSON.parse(JSON.stringify(item)));
+    });
+    await batch.commit();
+  }catch(e){console.warn('fbSave',col,e);}
+}
+
+function startFbListeners(){
+  fbUnsubs.forEach(u=>u()); fbUnsubs=[];
+  const lab=db.collection('labs').doc(LAB_ID);
+  fbUnsubs.push(lab.collection('samples').onSnapshot(s=>{
+    fbUpdating=true; samples=s.docs.map(d=>d.data()); renderSamples(); fbUpdating=false;
+  }));
+  fbUnsubs.push(lab.collection('myPs').onSnapshot(s=>{
+    fbUpdating=true; myPs=s.docs.map(d=>d.data()); renderMyPs(); fbUpdating=false;
+  }));
+  fbUnsubs.push(lab.collection('cellLines').onSnapshot(s=>{
+    fbUpdating=true; cellLines=s.docs.map(d=>d.data()); renderCells(); fbUpdating=false;
+  }));
+}
+
+// Hook into existing LS wrappers (already defined above)
+const __rSam=renderSamples;
+renderSamples=function(){__rSam();if(LAB_ID)fbSave('samples',samples);};
+const __rMyP=renderMyPs;
+renderMyPs=function(){__rMyP();if(LAB_ID)fbSave('myPs',myPs);};
+const __rCells=renderCells;
+renderCells=function(){__rCells();if(LAB_ID)fbSave('cellLines',cellLines);};
+
+// Init
+(function(){
+  const saved=localStorage.getItem('la_labId');
+  if(saved){
+    LAB_ID=saved;
+    document.getElementById('labChip').textContent='🧬 '+saved;
+    startFbListeners();
   } else {
-    setTimeout(showLabModal, 800);
+    setTimeout(showLabModal,700);
   }
 })();
 </script>
