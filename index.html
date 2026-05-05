@@ -211,7 +211,10 @@ textarea{resize:vertical;min-height:65px;}
 <div class="bar">
   <button class="back" id="backBtn" onclick="goHome()">← Home</button>
   <div class="bar-title">🧬 <span>Lab</span>Assist</div>
-  <span class="lab-chip" id="labChip" onclick="showLabModal()">🧬 —</span>
+  <div style="display:flex;align-items:center;gap:.4rem">
+    <div class="bar-lbl" id="barLbl"></div>
+    <span class="lab-chip" id="labChip" onclick="showLabModal()">🧬 —</span>
+  </div>
 </div>
 
 <!-- HOME -->
@@ -1128,8 +1131,11 @@ function createLabCode(){
 }
 
 function joinLab(){
-  const code=document.getElementById('labCodeInput').value.trim().toUpperCase();
+  let code=document.getElementById('labCodeInput').value.trim().toUpperCase();
   if(!code){toast('⚠️ Inserisci un codice');return;}
+  code=code.replace(/[\/\\.#$\[\]!@%^&*()+=<>?,;:'"]/g,'-').replace(/-+/g,'-').replace(/^-|-$/g,'');
+  if(!code){toast('⚠️ Codice non valido');return;}
+  document.getElementById('labCodeInput').value=code;
   LAB_ID=code;
   localStorage.setItem('la_labId',code);
   hideLabModal();
