@@ -50,6 +50,7 @@ body{background:var(--bg);color:var(--text);font-family:'Syne',sans-serif;min-he
 .ic-plate{background:linear-gradient(135deg,#fd79a8,#e84393);}
 .ic-cells{background:linear-gradient(135deg,#fab1a0,#e17055);}
 .ic-gel{background:linear-gradient(135deg,#74b9ff,#0984e3);}
+.ic-board{background:linear-gradient(135deg,#fd79a8,#6c5ce7);}
 
 /* INNER */
 .inner{padding:1.1rem;}
@@ -198,6 +199,26 @@ textarea{resize:vertical;min-height:65px;}
 .lt{width:38px;background:linear-gradient(to bottom,#ddd,#c8c8c8);border-radius:2px;position:relative;border:1px solid #bbb;cursor:pointer;}
 .gband{position:absolute;left:3px;right:3px;height:5px;border-radius:3px;cursor:pointer;}
 .gband:active{opacity:.6;}
+/* LAB BOARD */
+.board-tabs{display:flex;gap:.4rem;margin-bottom:.9rem;}
+.board-tab{flex:1;padding:.45rem;border-radius:10px;border:1.5px solid var(--border);background:var(--surface);font-family:'Syne',sans-serif;font-size:.7rem;font-weight:700;cursor:pointer;text-align:center;color:var(--muted);}
+.board-tab.active{background:#7c6fff;color:#fff;border-color:#7c6fff;}
+.board-panel{display:none;}.board-panel.active{display:block;}
+.todo-item{display:flex;align-items:flex-start;gap:.6rem;padding:.65rem .75rem;background:var(--surface);border:1.5px solid var(--border);border-radius:12px;margin-bottom:.5rem;}
+.todo-check{width:20px;height:20px;border-radius:6px;border:2px solid var(--border);cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:.75rem;margin-top:1px;}
+.todo-check.done{background:#7c6fff;border-color:#7c6fff;color:#fff;}
+.todo-text{flex:1;font-size:.82rem;line-height:1.4;}
+.todo-text.done{text-decoration:line-through;color:var(--muted);}
+.todo-del{background:none;border:none;color:var(--muted);font-size:.9rem;cursor:pointer;padding:.1rem .3rem;}
+.todo-meta{font-size:.6rem;color:var(--muted);margin-top:.15rem;}
+.note-area{width:100%;min-height:140px;border:1.5px solid var(--border);border-radius:12px;padding:.75rem;font-family:'Syne',sans-serif;font-size:.82rem;resize:vertical;background:var(--surface);color:var(--text);}
+.note-area:focus{outline:none;border-color:#7c6fff;}
+.event-item{padding:.65rem .75rem;background:var(--surface);border:1.5px solid var(--border);border-radius:12px;margin-bottom:.5rem;display:flex;align-items:center;gap:.7rem;}
+.event-date{background:#7c6fff22;color:#5a4dce;border-radius:8px;padding:.25rem .5rem;font-size:.65rem;font-weight:700;font-family:'JetBrains Mono',monospace;white-space:nowrap;}
+.event-info{flex:1;}
+.event-title{font-size:.82rem;font-weight:700;}
+.event-desc{font-size:.65rem;color:var(--muted);margin-top:.1rem;}
+.event-del{background:none;border:none;color:var(--muted);font-size:.9rem;cursor:pointer;}
 /* LAB MODAL */
 .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:500;display:flex;align-items:center;justify-content:center;padding:1.2rem;}
 .modal-box{background:var(--surface);border-radius:20px;padding:1.5rem;width:100%;max-width:340px;box-shadow:0 8px 40px rgba(0,0,0,.3);}
@@ -238,6 +259,10 @@ textarea{resize:vertical;min-height:65px;}
     <div class="app-grid">
       <div class="app-icon" onclick="go('protocols','📋 Protocolli')"><div class="ic-box ic-protocols">📋</div><div class="ic-name">Protocolli<br>Standard</div></div>
       <div class="app-icon" onclick="go('myp','✏️ I Miei')"><div class="ic-box ic-myp">✏️</div><div class="ic-name">I Miei<br>Protocolli</div></div>
+    </div>
+    <div class="hsec-lbl">Lab</div>
+    <div class="app-grid">
+      <div class="app-icon" onclick="go('board','📌 Lab Board')"><div class="ic-box ic-board">📌</div><div class="ic-name">Lab<br>Board</div></div>
     </div>
   </div>
 </div>
@@ -553,6 +578,54 @@ textarea{resize:vertical;min-height:65px;}
     <div class="ctitle" id="gelTitle">Gel 1</div>
     <div class="gel-wrap"><div class="gel-inner" id="gelInner" style="min-height:300px"></div></div>
     <div style="font-size:.65rem;color:var(--muted);font-family:'JetBrains Mono',monospace">💡 Clicca su una banda per eliminarla</div>
+  </div>
+</div></div>
+
+<!-- LAB BOARD -->
+<div id="view-board" class="view"><div class="inner">
+  <div class="ptitle"><div class="pdot" style="background:#6c5ce7"></div>Lab Board</div>
+
+  <div class="board-tabs">
+    <button class="board-tab active" onclick="switchBoard('todo')">📋 To-do</button>
+    <button class="board-tab" onclick="switchBoard('notes')">🗒️ Note</button>
+    <button class="board-tab" onclick="switchBoard('events')">📅 Agenda</button>
+  </div>
+
+  <!-- TODO -->
+  <div class="board-panel active" id="board-todo">
+    <div class="card">
+      <div class="frow" style="margin-bottom:.5rem">
+        <div style="flex:1"><input id="todoInput" placeholder="Nuova attività..."></div>
+      </div>
+      <div class="frow">
+        <div style="flex:1"><input id="todoAuthor" placeholder="Il tuo nome (opzionale)"></div>
+        <button class="btn btn-v btn-sm" onclick="addTodo()">+ Aggiungi</button>
+      </div>
+    </div>
+    <div id="todoList"></div>
+  </div>
+
+  <!-- NOTES -->
+  <div class="board-panel" id="board-notes">
+    <div class="card">
+      <div class="ctitle">📝 Note del Lab</div>
+      <textarea class="note-area" id="noteArea" placeholder="Scrivi note condivise con tutto il team..." oninput="saveNoteDebounced()"></textarea>
+      <div style="font-size:.62rem;color:var(--muted);margin-top:.4rem">Le note si salvano automaticamente</div>
+    </div>
+  </div>
+
+  <!-- EVENTS -->
+  <div class="board-panel" id="board-events">
+    <div class="card">
+      <div class="ctitle">➕ Nuovo Evento</div>
+      <div class="frow">
+        <div><label>Titolo</label><input id="evTitle" placeholder="es. Riunione lab"></div>
+        <div><label>Data</label><input type="date" id="evDate"></div>
+      </div>
+      <div style="margin-bottom:.5rem"><label>Descrizione</label><input id="evDesc" placeholder="Dettagli (opzionale)"></div>
+      <button class="btn btn-v" style="width:100%" onclick="addEvent()">+ Aggiungi Evento</button>
+    </div>
+    <div id="eventList"></div>
   </div>
 </div></div>
 
@@ -1108,6 +1181,106 @@ renderGel=function(){_rGel();LS.save('gel',{gelLanes,gelCfg});};
   </div>
 </div>
 
+// ===== LAB BOARD =====
+function switchBoard(tab){
+  document.querySelectorAll('.board-tab').forEach((t,i)=>{
+    t.classList.toggle('active',['todo','notes','events'][i]===tab);
+  });
+  document.querySelectorAll('.board-panel').forEach(p=>p.classList.remove('active'));
+  document.getElementById('board-'+tab).classList.add('active');
+}
+
+// --- TODO ---
+let todos=[];
+function addTodo(){
+  const text=document.getElementById('todoInput').value.trim();
+  if(!text){toast('⚠️ Inserisci un testo');return;}
+  const author=document.getElementById('todoAuthor').value.trim();
+  const item={id:Date.now(),text,author,done:false,date:new Date().toLocaleDateString('it-IT')};
+  todos.push(item);
+  document.getElementById('todoInput').value='';
+  renderTodos();
+  if(LAB_ID) fbSave('todos',todos);
+}
+function toggleTodo(id){
+  const t=todos.find(x=>x.id===id);
+  if(t){t.done=!t.done;renderTodos();if(LAB_ID)fbSave('todos',todos);}
+}
+function delTodo(id){
+  todos=todos.filter(x=>x.id!==id);
+  renderTodos();
+  if(LAB_ID) fbSave('todos',todos);
+}
+function renderTodos(){
+  const el=document.getElementById('todoList');
+  if(!el) return;
+  if(!todos.length){el.innerHTML='<div style="text-align:center;color:var(--muted);font-size:.78rem;padding:1rem">Nessuna attività 🎉</div>';return;}
+  const sorted=[...todos].sort((a,b)=>a.done-b.done);
+  el.innerHTML=sorted.map(t=>`
+    <div class="todo-item">
+      <div class="todo-check ${t.done?'done':''}" onclick="toggleTodo(${t.id})">${t.done?'✓':''}</div>
+      <div style="flex:1">
+        <div class="todo-text ${t.done?'done':''}">${t.text}</div>
+        <div class="todo-meta">${t.author?t.author+' · ':''}${t.date}</div>
+      </div>
+      <button class="todo-del" onclick="delTodo(${t.id})">✕</button>
+    </div>`).join('');
+}
+
+// --- NOTES ---
+let noteDebTimer=null;
+function saveNoteDebounced(){
+  clearTimeout(noteDebTimer);
+  noteDebTimer=setTimeout(()=>{
+    if(LAB_ID) fbSaveNote();
+  },1200);
+}
+async function fbSaveNote(){
+  if(!LAB_ID) return;
+  try{
+    const text=document.getElementById('noteArea').value;
+    await db.collection('labs').doc(LAB_ID).collection('board').doc('notes').set({text,updated:new Date().toISOString()});
+  }catch(e){console.warn('fbSaveNote',e);}
+}
+
+// --- EVENTS ---
+let labEvents=[];
+function addEvent(){
+  const title=document.getElementById('evTitle').value.trim();
+  const date=document.getElementById('evDate').value;
+  if(!title||!date){toast('⚠️ Inserisci titolo e data');return;}
+  const desc=document.getElementById('evDesc').value.trim();
+  const item={id:Date.now(),title,date,desc};
+  labEvents.push(item);
+  document.getElementById('evTitle').value='';
+  document.getElementById('evDate').value='';
+  document.getElementById('evDesc').value='';
+  renderEvents();
+  if(LAB_ID) fbSave('events',labEvents);
+}
+function delEvent(id){
+  labEvents=labEvents.filter(x=>x.id!==id);
+  renderEvents();
+  if(LAB_ID) fbSave('events',labEvents);
+}
+function renderEvents(){
+  const el=document.getElementById('eventList');
+  if(!el) return;
+  if(!labEvents.length){el.innerHTML='<div style="text-align:center;color:var(--muted);font-size:.78rem;padding:1rem">Nessun evento</div>';return;}
+  const sorted=[...labEvents].sort((a,b)=>a.date.localeCompare(b.date));
+  el.innerHTML=sorted.map(e=>`
+    <div class="event-item">
+      <div class="event-date">${e.date.split('-').reverse().join('/')}</div>
+      <div class="event-info">
+        <div class="event-title">${e.title}</div>
+        ${e.desc?`<div class="event-desc">${e.desc}</div>`:''}
+      </div>
+      <button class="event-del" onclick="delEvent(${e.id})">✕</button>
+    </div>`).join('');
+}
+
+</script>
+
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 <script>
@@ -1169,6 +1342,18 @@ function startFbListeners(){
   }));
   fbUnsubs.push(lab.collection('cellLines').onSnapshot(s=>{
     fbUpdating=true; cellLines=s.docs.map(d=>d.data()); renderCells(); fbUpdating=false;
+  }));
+  fbUnsubs.push(lab.collection('todos').onSnapshot(s=>{
+    todos=s.docs.map(d=>d.data()); renderTodos();
+  }));
+  fbUnsubs.push(lab.collection('events').onSnapshot(s=>{
+    labEvents=s.docs.map(d=>d.data()); renderEvents();
+  }));
+  fbUnsubs.push(lab.collection('board').doc('notes').onSnapshot(s=>{
+    if(s.exists){
+      const el=document.getElementById('noteArea');
+      if(el && document.activeElement!==el) el.value=s.data().text||'';
+    }
   }));
 }
 
