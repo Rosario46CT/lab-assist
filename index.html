@@ -23,12 +23,15 @@ body{background:var(--bg);color:var(--text);font-family:'Syne',sans-serif;min-he
 @keyframes alarmPulse{from{opacity:1;transform:scale(1)}to{opacity:.6;transform:scale(1.06)}}
 
 /* STATUS BAR */
-.bar{background:#1a1a20;color:#fff;padding:.65rem 1.2rem;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:200;}
-.bar-title{font-weight:800;font-size:.95rem;letter-spacing:-.5px;}
+.bar{background:#1a1a20;color:#fff;padding:.5rem .9rem;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:200;gap:.5rem;}
+.bar-left{display:flex;align-items:center;gap:.5rem;min-width:0;flex:1;}
+.bar-center{display:flex;flex-direction:column;align-items:center;flex-shrink:0;}
+.bar-right{display:flex;align-items:center;gap:.4rem;flex-shrink:0;}
+.bar-title{font-weight:800;font-size:.92rem;letter-spacing:-.5px;white-space:nowrap;}
 .bar-title span{color:#7c6fff;}
-.back{background:rgba(255,255,255,.12);border:none;color:#fff;font-family:'Syne',sans-serif;font-size:.78rem;font-weight:700;padding:.28rem .8rem;border-radius:20px;cursor:pointer;display:none;align-items:center;gap:.3rem;}
+.back{background:rgba(255,255,255,.12);border:none;color:#fff;font-family:'Syne',sans-serif;font-size:.72rem;font-weight:700;padding:.22rem .65rem;border-radius:20px;cursor:pointer;display:none;align-items:center;gap:.25rem;white-space:nowrap;}
 .back.show{display:flex;}
-.bar-lbl{font-size:.75rem;color:rgba(255,255,255,.55);font-weight:600;}
+.bar-lbl{font-size:.65rem;color:rgba(255,255,255,.6);font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100px;}
 
 /* HOME */
 .hero{background:linear-gradient(135deg,#1a1a20,#2d2060);padding:1.75rem 1.4rem 1.4rem;color:#fff;}
@@ -211,7 +214,7 @@ textarea{resize:vertical;min-height:65px;}
 .todo-text.done{text-decoration:line-through;color:var(--muted);}
 .todo-del{background:none;border:none;color:var(--muted);font-size:.9rem;cursor:pointer;padding:.1rem .3rem;}
 .todo-meta{font-size:.6rem;color:var(--muted);margin-top:.15rem;}
-.note-area{width:100%;min-height:140px;border:1.5px solid var(--border);border-radius:12px;padding:.75rem;font-family:'Syne',sans-serif;font-size:.82rem;resize:vertical;background:var(--surface);color:var(--text);}
+.note-area{width:100%;min-height:140px;border:1.5px solid var(--border);border-radius:12px;padding:.75rem .75rem .9rem;font-family:'Syne',sans-serif;font-size:.82rem;line-height:1.6;resize:vertical;background:var(--surface);color:var(--text);overflow:visible;}
 .note-area:focus{outline:none;border-color:#7c6fff;}
 .event-item{padding:.65rem .75rem;background:var(--surface);border:1.5px solid var(--border);border-radius:12px;margin-bottom:.5rem;display:flex;align-items:center;gap:.7rem;}
 .event-date{background:#7c6fff22;color:#5a4dce;border-radius:8px;padding:.25rem .5rem;font-size:.65rem;font-weight:700;font-family:'JetBrains Mono',monospace;white-space:nowrap;}
@@ -230,9 +233,11 @@ textarea{resize:vertical;min-height:65px;}
 <body>
 
 <div class="bar">
-  <button class="back" id="backBtn" onclick="goHome()">← Home</button>
-  <div class="bar-title">🧬 <span>Lab</span>Assist</div>
-  <div style="display:flex;align-items:center;gap:.4rem">
+  <div class="bar-left">
+    <button class="back" id="backBtn" onclick="goHome()">← Home</button>
+    <div class="bar-title" id="barMainTitle">🧬 <span>Lab</span>Assist</div>
+  </div>
+  <div class="bar-right">
     <div class="bar-lbl" id="barLbl"></div>
     <span class="lab-chip" id="labChip" onclick="showLabModal()">🧬 —</span>
   </div>
@@ -637,6 +642,7 @@ function go(id,lbl){
   document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
   document.getElementById('view-'+id).classList.add('active');
   document.getElementById('backBtn').classList.add('show');
+  document.getElementById('barMainTitle').style.display='none';
   document.getElementById('barLbl').textContent=lbl;
   window.scrollTo(0,0);
 }
@@ -644,6 +650,7 @@ function goHome(){
   document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
   document.getElementById('view-home').classList.add('active');
   document.getElementById('backBtn').classList.remove('show');
+  document.getElementById('barMainTitle').style.display='';
   document.getElementById('barLbl').textContent='';
 }
 function showCalc(id){
@@ -657,11 +664,51 @@ document.getElementById('heroDate').textContent=new Date().toLocaleDateString('i
 
 // ===== TIMERS =====
 let timers=[],tIv=null;
+
+// 6 suoni distinti — assegnati in base all'ordine di creazione (slot 0-5, ciclico)
+const TIMER_SOUNDS=[
+  // 0 — Doppio bip acuto (originale)
+  (ctx,now)=>{
+    const beep=(freq,start,dur)=>{const o=ctx.createOscillator(),g=ctx.createGain();o.connect(g);g.connect(ctx.destination);o.type='sine';o.frequency.value=freq;g.gain.setValueAtTime(0,now+start);g.gain.linearRampToValueAtTime(0.45,now+start+0.02);g.gain.linearRampToValueAtTime(0,now+start+dur);o.start(now+start);o.stop(now+start+dur+0.05);};
+    beep(880,0,0.18);beep(880,0.22,0.18);beep(1100,0.48,0.35);
+  },
+  // 1 — Tre bip gravi (basso)
+  (ctx,now)=>{
+    const beep=(freq,start,dur)=>{const o=ctx.createOscillator(),g=ctx.createGain();o.connect(g);g.connect(ctx.destination);o.type='square';o.frequency.value=freq;g.gain.setValueAtTime(0,now+start);g.gain.linearRampToValueAtTime(0.3,now+start+0.02);g.gain.linearRampToValueAtTime(0,now+start+dur);o.start(now+start);o.stop(now+start+dur+0.05);};
+    beep(330,0,0.22);beep(330,0.28,0.22);beep(330,0.56,0.22);
+  },
+  // 2 — Arpeggio ascendente
+  (ctx,now)=>{
+    const beep=(freq,start,dur)=>{const o=ctx.createOscillator(),g=ctx.createGain();o.connect(g);g.connect(ctx.destination);o.type='sine';o.frequency.value=freq;g.gain.setValueAtTime(0,now+start);g.gain.linearRampToValueAtTime(0.4,now+start+0.02);g.gain.linearRampToValueAtTime(0,now+start+dur);o.start(now+start);o.stop(now+start+dur+0.05);};
+    beep(523,0,0.14);beep(659,0.18,0.14);beep(784,0.36,0.14);beep(1047,0.54,0.28);
+  },
+  // 3 — Lungo singolo tono medio
+  (ctx,now)=>{
+    const o=ctx.createOscillator(),g=ctx.createGain();o.connect(g);g.connect(ctx.destination);o.type='sawtooth';o.frequency.value=660;g.gain.setValueAtTime(0,now);g.gain.linearRampToValueAtTime(0.35,now+0.05);g.gain.linearRampToValueAtTime(0.35,now+0.55);g.gain.linearRampToValueAtTime(0,now+0.7);o.start(now);o.stop(now+0.75);
+  },
+  // 4 — SOS (tre brevi, tre lunghi, tre brevi)
+  (ctx,now)=>{
+    const beep=(freq,start,dur)=>{const o=ctx.createOscillator(),g=ctx.createGain();o.connect(g);g.connect(ctx.destination);o.type='sine';o.frequency.value=freq;g.gain.setValueAtTime(0,now+start);g.gain.linearRampToValueAtTime(0.4,now+start+0.02);g.gain.linearRampToValueAtTime(0,now+start+dur);o.start(now+start);o.stop(now+start+dur+0.05);};
+    [0,.15,.30].forEach(s=>beep(900,s,.1));
+    [.50,.70,.90].forEach(s=>beep(900,s,.2));
+    [1.15,1.30,1.45].forEach(s=>beep(900,s,.1));
+  },
+  // 5 — Melodia discendente
+  (ctx,now)=>{
+    const beep=(freq,start,dur)=>{const o=ctx.createOscillator(),g=ctx.createGain();o.connect(g);g.connect(ctx.destination);o.type='triangle';o.frequency.value=freq;g.gain.setValueAtTime(0,now+start);g.gain.linearRampToValueAtTime(0.42,now+start+0.02);g.gain.linearRampToValueAtTime(0,now+start+dur);o.start(now+start);o.stop(now+start+dur+0.05);};
+    beep(1200,0,0.18);beep(960,0.24,0.18);beep(720,0.48,0.18);beep(540,0.72,0.32);
+  },
+];
+const SOUND_NAMES=['🔵 Doppio bip','🟠 Tre bassi','🟢 Arpeggio','🔴 Lungo','🟣 SOS','🟡 Discendente'];
+let timerSoundCounter=0; // cyclic counter to assign sounds
+
 function addTimer(){
   const name=document.getElementById('tName').value||'Timer '+(timers.length+1);
   const total=(parseInt(document.getElementById('tH').value)||0)*3600+(parseInt(document.getElementById('tM').value)||0)*60+(parseInt(document.getElementById('tS').value)||0);
   if(total<=0){toast('⚠️ Imposta una durata');return;}
-  timers.push({id:Date.now(),name,total,remaining:total,running:false,done:false});
+  const soundIdx=timerSoundCounter % TIMER_SOUNDS.length;
+  timerSoundCounter++;
+  timers.push({id:Date.now(),name,total,remaining:total,running:false,done:false,soundIdx});
   renderTimers();startTiv();document.getElementById('tName').value='';
 }
 // Track active alarms: timerId -> {vibIv, beepIv, ctx}
@@ -677,27 +724,17 @@ function alertTimer(name,timerId){
   },2000);
 
   // --- Beep loop via Web Audio API ---
+  const t=timers.find(x=>x.id===timerId);
+  const soundFn=TIMER_SOUNDS[(t&&t.soundIdx!=null)?t.soundIdx:0];
   let ctx=null;
   let beepIv=null;
   try{
     ctx=new(window.AudioContext||window.webkitAudioContext)();
     const playBeeps=()=>{
-      try{
-        const now=ctx.currentTime;
-        const beep=(freq,start,dur)=>{
-          const o=ctx.createOscillator(),g=ctx.createGain();
-          o.connect(g);g.connect(ctx.destination);
-          o.type='sine';o.frequency.value=freq;
-          g.gain.setValueAtTime(0,now+start);
-          g.gain.linearRampToValueAtTime(0.45,now+start+0.02);
-          g.gain.linearRampToValueAtTime(0,now+start+dur);
-          o.start(now+start);o.stop(now+start+dur+0.05);
-        };
-        beep(880,0,0.18);beep(880,0.22,0.18);beep(1100,0.48,0.35);
-      }catch(e){}
+      try{soundFn(ctx,ctx.currentTime);}catch(e){}
     };
     playBeeps();
-    beepIv=setInterval(playBeeps,2000);
+    beepIv=setInterval(playBeeps,2200);
   }catch(e){}
 
   activeAlarms[timerId]={vibIv,beepIv,ctx};
@@ -727,7 +764,8 @@ function renderTimers(){
   if(!timers.length){g.innerHTML='<div style="color:var(--muted);font-size:.8rem">Nessun timer attivo</div>';return;}
   g.innerHTML='';
   timers.forEach(t=>{const pct=(t.remaining/t.total)*100,cls=t.done?'done':t.running?'running':'';
-    g.innerHTML+=`<div class="tcard ${cls}"><button class="tdel" onclick="delTimer(${t.id})">✕</button><div class="tname">${t.name}</div><div class="tdisp">${fmtT(t.remaining)}</div><div class="tprog"><div class="tpbar" style="width:${pct}%"></div></div><div class="tbtns">${t.done?(activeAlarms[t.id]?`<button class="btn btn-r btn-sm" style="animation:alarmPulse .6s infinite alternate" onclick="stopAlarm(${t.id})">🔔 STOP</button>`:'<span style="font-size:.75rem;font-weight:700;color:#e17055">✅ COMPLETATO</span>'):`<button class="btn btn-sm" onclick="togTimer(${t.id})">${t.running?'⏸ Pausa':'▶ Avvia'}</button>`}<button class="btn btn-sm btn-o" onclick="rstTimer(${t.id})">↺</button></div></div>`;
+    const sName=SOUND_NAMES[t.soundIdx!=null?t.soundIdx:0];
+    g.innerHTML+=`<div class="tcard ${cls}"><button class="tdel" onclick="delTimer(${t.id})">✕</button><div class="tname">${t.name}</div><div style="font-size:.55rem;color:var(--muted);margin-bottom:.3rem;font-family:'JetBrains Mono',monospace">${sName}</div><div class="tdisp">${fmtT(t.remaining)}</div><div class="tprog"><div class="tpbar" style="width:${pct}%"></div></div><div class="tbtns">${t.done?(activeAlarms[t.id]?`<button class="btn btn-r btn-sm" style="animation:alarmPulse .6s infinite alternate" onclick="stopAlarm(${t.id})">🔔 STOP</button>`:'<span style="font-size:.75rem;font-weight:700;color:#e17055">✅ COMPLETATO</span>'):`<button class="btn btn-sm" onclick="togTimer(${t.id})">${t.running?'⏸ Pausa':'▶ Avvia'}</button>`}<button class="btn btn-sm btn-o" onclick="rstTimer(${t.id})">↺</button></div></div>`;
   });
 }
 
