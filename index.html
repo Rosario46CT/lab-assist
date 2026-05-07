@@ -1167,17 +1167,56 @@ renderGel=function(){_rGel();LS.save('gel',{gelLanes,gelCfg});};
 <!-- LAB MODAL -->
 <div class="modal-overlay" id="labModal" style="display:none">
   <div class="modal-box">
-    <div class="modal-title">🧬 Benvenuto in LabAssist</div>
-    <div class="modal-sub">Inserisci il codice del tuo lab per sincronizzare campioni, protocolli e cell culture con il team.<br><br>Non hai un codice? Creane uno e condividilo con i colleghi!</div>
-    <div style="margin-bottom:.7rem">
-      <label>Codice Lab</label>
-      <input id="labCodeInput" placeholder="es. LAB-ROSSI-2024" style="text-transform:uppercase;letter-spacing:1px">
+
+    <!-- STEP 1: scegli se entrare o creare -->
+    <div id="labStep1">
+      <div class="modal-title">🧬 LabAssist</div>
+      <div class="modal-sub">Accedi a una stanza esistente oppure creane una nuova con il tuo team.</div>
+      <div style="display:flex;gap:.55rem;margin-bottom:.6rem">
+        <button class="btn btn-v" style="flex:1" onclick="labShowJoin()">🔗 Entra</button>
+        <button class="btn btn-g" style="flex:1" onclick="labShowCreate()">✨ Crea stanza</button>
+      </div>
+      <div style="font-size:.62rem;color:var(--muted);text-align:center">Timer e Gel restano sempre locali sul dispositivo</div>
     </div>
-    <div style="display:flex;gap:.5rem;margin-bottom:.75rem">
-      <button class="btn btn-v" style="flex:1" onclick="joinLab()">🔗 Entra</button>
-      <button class="btn btn-g" style="flex:1" onclick="createLabCode()">✨ Crea codice</button>
+
+    <!-- STEP 2a: entra in una stanza -->
+    <div id="labStepJoin" style="display:none">
+      <div class="modal-title">🔗 Entra nella stanza</div>
+      <div class="modal-sub">Inserisci il codice e il PIN che ti ha dato il creatore della stanza.</div>
+      <div style="margin-bottom:.6rem">
+        <label>Codice Stanza</label>
+        <input id="joinCodeInput" placeholder="es. ALPHA-421" style="text-transform:uppercase;letter-spacing:1px;margin-bottom:.5rem">
+        <label>PIN</label>
+        <input id="joinPinInput" type="password" placeholder="••••" maxlength="12">
+      </div>
+      <div id="joinError" style="color:#e17055;font-size:.72rem;margin-bottom:.5rem;display:none">❌ Codice o PIN errato</div>
+      <div style="display:flex;gap:.5rem">
+        <button class="btn btn-o" style="flex:1" onclick="labBack()">← Indietro</button>
+        <button class="btn btn-v" style="flex:1" id="joinBtn" onclick="doJoinLab()">Entra →</button>
+      </div>
     </div>
-    <div style="font-size:.62rem;color:var(--muted);text-align:center">Timer e Gel restano sempre locali sul dispositivo</div>
+
+    <!-- STEP 2b: crea una stanza -->
+    <div id="labStepCreate" style="display:none">
+      <div class="modal-title">✨ Crea Stanza</div>
+      <div class="modal-sub">Scegli un codice (o generane uno) e imposta un PIN per proteggere l'accesso.</div>
+      <div style="margin-bottom:.6rem">
+        <label>Codice Stanza</label>
+        <div style="display:flex;gap:.4rem;margin-bottom:.5rem">
+          <input id="createCodeInput" placeholder="es. HELIX-303" style="text-transform:uppercase;letter-spacing:1px;flex:1">
+          <button class="btn btn-o btn-sm" onclick="genLabCode()">🎲</button>
+        </div>
+        <label>PIN (segreto)</label>
+        <input id="createPinInput" type="password" placeholder="Min. 4 caratteri" maxlength="12">
+      </div>
+      <div id="createError" style="color:#e17055;font-size:.72rem;margin-bottom:.5rem;display:none">⚠️ Inserisci codice e PIN (min. 4 car.)</div>
+      <div id="createExistsError" style="color:#e17055;font-size:.72rem;margin-bottom:.5rem;display:none">❌ Codice già in uso, scegline un altro</div>
+      <div style="display:flex;gap:.5rem">
+        <button class="btn btn-o" style="flex:1" onclick="labBack()">← Indietro</button>
+        <button class="btn btn-g" style="flex:1" id="createBtn" onclick="doCreateLab()">Crea →</button>
+      </div>
+    </div>
+
   </div>
 </div>
 
@@ -1297,24 +1336,113 @@ firebase.initializeApp({
 const db=firebase.firestore();
 let LAB_ID=null, fbUnsubs=[], fbUpdating=false;
 
-function showLabModal(){document.getElementById('labModal').style.display='flex';}
-function hideLabModal(){document.getElementById('labModal').style.display='none';}
-
-function createLabCode(){
-  const w=['ALPHA','BETA','GAMMA','DELTA','SIGMA','OMEGA','NOVA','HELIX','ZETA','KAPPA'];
-  document.getElementById('labCodeInput').value=w[Math.floor(Math.random()*w.length)]+'-'+Math.floor(100+Math.random()*900);
-  toast('✨ Codice generato! Condividilo con il team');
+// === Semplice hash PIN (non crittografico ma evita testo in chiaro su Firestore) ===
+async function hashPin(pin){
+  const buf=await crypto.subtle.digest('SHA-256', new TextEncoder().encode(pin));
+  return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
 }
 
-function joinLab(){
-  const code=document.getElementById('labCodeInput').value.trim().toUpperCase();
-  if(!code){toast('⚠️ Inserisci un codice');return;}
+// === Controlli modale ===
+function showLabModal(){
+  // Reset a step1
+  document.getElementById('labStep1').style.display='';
+  document.getElementById('labStepJoin').style.display='none';
+  document.getElementById('labStepCreate').style.display='none';
+  document.getElementById('labModal').style.display='flex';
+}
+function hideLabModal(){document.getElementById('labModal').style.display='none';}
+function labShowJoin(){
+  document.getElementById('labStep1').style.display='none';
+  document.getElementById('labStepJoin').style.display='';
+  document.getElementById('joinError').style.display='none';
+  document.getElementById('joinCodeInput').value='';
+  document.getElementById('joinPinInput').value='';
+}
+function labShowCreate(){
+  document.getElementById('labStep1').style.display='none';
+  document.getElementById('labStepCreate').style.display='';
+  document.getElementById('createError').style.display='none';
+  document.getElementById('createExistsError').style.display='none';
+  document.getElementById('createCodeInput').value='';
+  document.getElementById('createPinInput').value='';
+}
+function labBack(){
+  document.getElementById('labStep1').style.display='';
+  document.getElementById('labStepJoin').style.display='none';
+  document.getElementById('labStepCreate').style.display='none';
+}
+function genLabCode(){
+  const w=['ALPHA','BETA','GAMMA','DELTA','SIGMA','OMEGA','NOVA','HELIX','ZETA','KAPPA'];
+  document.getElementById('createCodeInput').value=w[Math.floor(Math.random()*w.length)]+'-'+Math.floor(100+Math.random()*900);
+}
+
+// === Entra in una stanza esistente (verifica PIN) ===
+async function doJoinLab(){
+  const code=document.getElementById('joinCodeInput').value.trim().toUpperCase();
+  const pin=document.getElementById('joinPinInput').value.trim();
+  document.getElementById('joinError').style.display='none';
+  if(!code||!pin){document.getElementById('joinError').style.display='';document.getElementById('joinError').textContent='⚠️ Inserisci codice e PIN';return;}
+  const btn=document.getElementById('joinBtn');
+  btn.disabled=true; btn.textContent='Verifica…';
+  try{
+    const snap=await db.collection('labs').doc(code).get();
+    if(!snap.exists){throw new Error('not found');}
+    const pinHash=await hashPin(pin);
+    if(snap.data().pinHash!==pinHash){throw new Error('wrong pin');}
+    // PIN corretto
+    activateLab(code, pin);
+  }catch(e){
+    document.getElementById('joinError').style.display='';
+    document.getElementById('joinError').textContent='❌ Codice o PIN errato';
+  }finally{
+    btn.disabled=false; btn.textContent='Entra →';
+  }
+}
+
+// === Crea una nuova stanza ===
+async function doCreateLab(){
+  const code=document.getElementById('createCodeInput').value.trim().toUpperCase();
+  const pin=document.getElementById('createPinInput').value.trim();
+  document.getElementById('createError').style.display='none';
+  document.getElementById('createExistsError').style.display='none';
+  if(!code||pin.length<4){document.getElementById('createError').style.display='';return;}
+  const btn=document.getElementById('createBtn');
+  btn.disabled=true; btn.textContent='Creo…';
+  try{
+    const ref=db.collection('labs').doc(code);
+    const snap=await ref.get();
+    if(snap.exists){document.getElementById('createExistsError').style.display='';return;}
+    const pinHash=await hashPin(pin);
+    await ref.set({pinHash, createdAt:new Date().toISOString()});
+    activateLab(code, pin);
+    toast('✅ Stanza '+code+' creata! Condividi codice + PIN');
+  }catch(e){
+    toast('❌ Errore creazione: '+e.message);
+  }finally{
+    btn.disabled=false; btn.textContent='Crea →';
+  }
+}
+
+// === Attiva la sessione dopo login OK ===
+function activateLab(code, pin){
   LAB_ID=code;
-  localStorage.setItem('la_labId',code);
+  localStorage.setItem('la_labId', code);
+  localStorage.setItem('la_labPin', pin);   // salvato per riconnettersi al reload
   hideLabModal();
   document.getElementById('labChip').textContent='🧬 '+code;
   startFbListeners();
   toast('🔗 Lab: '+code);
+}
+
+// === Logout dalla stanza ===
+function leaveLab(){
+  fbUnsubs.forEach(u=>u()); fbUnsubs=[];
+  LAB_ID=null;
+  localStorage.removeItem('la_labId');
+  localStorage.removeItem('la_labPin');
+  document.getElementById('labChip').textContent='🧬 —';
+  toast('👋 Disconnesso dalla stanza');
+  showLabModal();
 }
 
 async function fbSave(col,items){
@@ -1366,16 +1494,28 @@ renderMyPs=function(){__rMyP();if(LAB_ID)fbSave('myPs',myPs);};
 const __rCells=renderCells;
 renderCells=function(){__rCells();if(LAB_ID)fbSave('cellLines',cellLines);};
 
-// Init
-(function(){
+// Init — riconnette solo se sia codice che PIN sono salvati e verificati
+(async function(){
   const saved=localStorage.getItem('la_labId');
-  if(saved){
-    LAB_ID=saved;
-    document.getElementById('labChip').textContent='🧬 '+saved;
-    startFbListeners();
-  } else {
-    setTimeout(showLabModal,700);
+  const savedPin=localStorage.getItem('la_labPin');
+  if(saved && savedPin){
+    try{
+      const snap=await db.collection('labs').doc(saved).get();
+      if(snap.exists){
+        const pinHash=await hashPin(savedPin);
+        if(snap.data().pinHash===pinHash){
+          LAB_ID=saved;
+          document.getElementById('labChip').textContent='🧬 '+saved;
+          startFbListeners();
+          return;
+        }
+      }
+    }catch(e){}
+    // Credenziali non valide: pulisci e mostra modale
+    localStorage.removeItem('la_labId');
+    localStorage.removeItem('la_labPin');
   }
+  setTimeout(showLabModal,700);
 })();
 </script>
 </body>
