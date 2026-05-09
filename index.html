@@ -708,8 +708,8 @@ function addTimer(){
   if(total<=0){toast('⚠️ Imposta una durata');return;}
   const soundIdx=timerSoundCounter % TIMER_SOUNDS.length;
   timerSoundCounter++;
-  timers.push({id:Date.now(),name,total,remaining:total,running:false,done:false,soundIdx});
-  renderTimers();startTiv();document.getElementById('tName').value='';
+  timers.push({id:Date.now(),name,total,remaining:total,running:false,done:false,soundIdx,startedAt:null,pausedRemaining:total});
+  renderTimers();document.getElementById('tName').value='';
 }
 // Track active alarms: timerId -> {vibIv, beepIv, ctx}
 const activeAlarms={};
@@ -754,9 +754,43 @@ function stopAlarm(timerId){
 function spinAdj(id,delta){const el=document.getElementById(id);const max=id==='tH'?23:59;let v=(parseInt(el.value)||0)+delta;if(v<0)v=max;if(v>max)v=0;el.value=String(v).padStart(2,'0');}
 function clampSpin(id,mn,mx){const el=document.getElementById(id);let v=parseInt(el.value);if(isNaN(v))v=mn;el.value=Math.max(mn,Math.min(mx,v));}
 function setTimerPreset(h,m,s){document.getElementById('tH').value=String(h).padStart(2,'0');document.getElementById('tM').value=String(m).padStart(2,'0');document.getElementById('tS').value=String(s).padStart(2,'0');}
-function startTiv(){if(tIv)return;tIv=setInterval(()=>{let any=false;timers.forEach(t=>{if(t.running&&!t.done){t.remaining--;any=true;if(t.remaining<=0){t.remaining=0;t.running=false;t.done=true;alertTimer(t.name,t.id);}}});renderTimers();if(!any){clearInterval(tIv);tIv=null;}},1000);}
-function togTimer(id){const t=timers.find(x=>x.id===id);if(!t||t.done)return;t.running=!t.running;if(t.running)startTiv();renderTimers();}
-function rstTimer(id){stopAlarm(id);const t=timers.find(x=>x.id===id);if(!t)return;t.remaining=t.total;t.running=false;t.done=false;renderTimers();}
+function startTiv(){
+  if(tIv)return;
+  tIv=setInterval(()=>{
+    const now=Date.now();
+    let any=false;
+    timers.forEach(t=>{
+      if(t.running&&!t.done){
+        any=true;
+        // Calcolo basato su timestamp reale: immune a throttling e screen-off
+        t.remaining=Math.max(0, Math.round(t.pausedRemaining - (now - t.startedAt)/1000));
+        if(t.remaining<=0){
+          t.remaining=0;t.running=false;t.done=true;
+          alertTimer(t.name,t.id);
+        }
+      }
+    });
+    renderTimers();
+    if(!any){clearInterval(tIv);tIv=null;}
+  },500);
+}
+function togTimer(id){
+  const t=timers.find(x=>x.id===id);
+  if(!t||t.done)return;
+  if(t.running){
+    // PAUSA: salva quanto è rimasto
+    t.pausedRemaining=t.remaining;
+    t.startedAt=null;
+    t.running=false;
+  } else {
+    // AVVIA/RIPRENDI: segna il timestamp di partenza
+    t.startedAt=Date.now();
+    t.running=true;
+    startTiv();
+  }
+  renderTimers();
+}
+function rstTimer(id){stopAlarm(id);const t=timers.find(x=>x.id===id);if(!t)return;t.remaining=t.total;t.pausedRemaining=t.total;t.startedAt=null;t.running=false;t.done=false;renderTimers();}
 function delTimer(id){stopAlarm(id);timers=timers.filter(x=>x.id!==id);renderTimers();}
 function fmtT(s){const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),sec=s%60;return h>0?`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`:`${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`;}
 function renderTimers(){
